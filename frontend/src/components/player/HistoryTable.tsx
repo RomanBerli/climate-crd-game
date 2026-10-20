@@ -8,9 +8,9 @@ interface HistoryTableProps {
 }
 
 /**
- * Statische Transparenz-Matrix gemäss Spec 1.4 & Plan 3.3:
- * Spieler 1 steht immer ganz links, Spieler 6 immer ganz rechts.
- * Es wird KEINE Gesamtsumme des Klimatopfes berechnet oder angezeigt!
+ * Statische Transparenz-Anzeige gemäss Spec 1.4:
+ * Es wird ausschliesslich die unmittelbar letzte Runde angezeigt (Spieler 1 bis Spieler 6).
+ * Für ältere Runden müssen sich die Spieler selbst Notizen im Notizblock machen.
  */
 export const HistoryTable: React.FC<HistoryTableProps> = ({
   history,
@@ -18,19 +18,24 @@ export const HistoryTable: React.FC<HistoryTableProps> = ({
   groupSize,
 }) => {
   const playerColumns = Array.from({ length: groupSize }, (_, i) => i + 1);
+  const lastRoundEntry = history.length > 0 ? history[history.length - 1] : null;
 
   return (
     <section className="history-card">
       <div className="history-card__header">
-        <h3 className="section-title">Runden-Historie (Einzelbeiträge in Rappen)</h3>
+        <h3 className="section-title">
+          {lastRoundEntry
+            ? `Rückblick: Einzelbeiträge der letzten Runde (Runde ${lastRoundEntry.round})`
+            : 'Rückblick: Letzte Runde'}
+        </h3>
         <span className="history-card__hint">
-          Statische Spaltenordnung (Spieler 1 bis Spieler {groupSize})
+          Nur die jeweils letzte Runde ist sichtbar – nutzen Sie Ihren Notizblock!
         </span>
       </div>
 
-      {history.length === 0 ? (
+      {!lastRoundEntry ? (
         <div className="history-empty">
-          Noch keine Runde abgeschlossen. Nach Abschluss von Runde 1 erscheinen hier die Einzelinvestitionen aller 6 Spieler.
+          Runde 1 läuft. Ab Runde 2 sehen Sie hier jeweils nur die Einzelinvestitionen der unmittelbar vorherigen Runde. Bitte notieren Sie sich wichtige Werte selbst im Notizblock!
         </div>
       ) : (
         <div className="history-table-wrapper">
@@ -50,27 +55,27 @@ export const HistoryTable: React.FC<HistoryTableProps> = ({
               </tr>
             </thead>
             <tbody>
-              {history.map((row) => (
-                <tr key={row.round}>
-                  <td className="history-table__round">Runde {row.round}</td>
-                  {playerColumns.map((pNum) => {
-                    const entry = row.investments.find((inv) => inv.playerNumber === pNum);
-                    const amount = entry ? entry.amountRappen : 0;
-                    return (
-                      <td
-                        key={pNum}
-                        className={`history-table__cell ${
-                          pNum === myPlayerNumber ? 'history-table__col--me' : ''
-                        }`}
-                      >
-                        <span className={`amount-pill amount-pill--${amount}`}>
-                          {amount} Rp.
-                        </span>
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
+              <tr>
+                <td className="history-table__round">Runde {lastRoundEntry.round}</td>
+                {playerColumns.map((pNum) => {
+                  const entry = lastRoundEntry.investments.find(
+                    (inv) => inv.playerNumber === pNum
+                  );
+                  const amount = entry ? entry.amountRappen : 0;
+                  return (
+                    <td
+                      key={pNum}
+                      className={`history-table__cell ${
+                        pNum === myPlayerNumber ? 'history-table__col--me' : ''
+                      }`}
+                    >
+                      <span className={`amount-pill amount-pill--${amount}`}>
+                        {amount} Rp.
+                      </span>
+                    </td>
+                  );
+                })}
+              </tr>
             </tbody>
           </table>
         </div>

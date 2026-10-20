@@ -240,35 +240,29 @@ public class GameEngineService {
             List<RoundInvestment> allInvestments,
             int groupSize
     ) {
-        int maxCompletedRound = session.getStatus() == SessionStatus.FINISHED
-                ? appProperties.getGame().getTotalRounds()
-                : Math.max(0, session.getCurrentRound() - 1);
+        if (session.getStatus() != SessionStatus.RUNNING || session.getCurrentRound() <= 1) {
+            return List.of();
+        }
 
-        Map<Integer, Map<Integer, RoundInvestment>> byRoundAndPlayer = allInvestments.stream()
-                .filter(inv -> inv.getRoundNumber() <= maxCompletedRound)
-                .collect(Collectors.groupingBy(
-                        RoundInvestment::getRoundNumber,
-                        Collectors.toMap(
-                                RoundInvestment::getPlayerNumber,
-                                inv -> inv,
-                                (a, b) -> a
-                        )
+        int lastCompletedRound = session.getCurrentRound() - 1;
+        Map<Integer, RoundInvestment> roundMap = allInvestments.stream()
+                .filter(inv -> inv.getRoundNumber() == lastCompletedRound)
+                .collect(Collectors.toMap(
+                        RoundInvestment::getPlayerNumber,
+                        inv -> inv,
+                        (a, b) -> a
                 ));
 
-        List<RoundHistoryDto> history = new ArrayList<>();
-        for (int r = 1; r <= maxCompletedRound; r++) {
-            Map<Integer, RoundInvestment> roundMap = byRoundAndPlayer.getOrDefault(r, Map.of());
-            List<RoundHistoryDto.PlayerInvestmentDto> row = new ArrayList<>();
-            // Statische Reihenfolge Spieler 1 bis 6 (Spec 1.4)
-            for (int pNum = 1; pNum <= groupSize; pNum++) {
-                RoundInvestment inv = roundMap.get(pNum);
-                int amount = inv != null ? inv.getAmountRappen() : 0;
-                boolean autoBet = inv != null && inv.isAutoBet();
-                row.add(new RoundHistoryDto.PlayerInvestmentDto(pNum, amount, autoBet));
-            }
-            history.add(new RoundHistoryDto(r, row));
+        List<RoundHistoryDto.PlayerInvestmentDto> row = new ArrayList<>();
+        // Statische Reihenfolge Spieler 1 bis 6 (Spec 1.4) - nur die unmittelbar letzte Runde!
+        for (int pNum = 1; pNum <= groupSize; pNum++) {
+            RoundInvestment inv = roundMap.get(pNum);
+            int amount = inv != null ? inv.getAmountRappen() : 0;
+            boolean autoBet = inv != null && inv.isAutoBet();
+            row.add(new RoundHistoryDto.PlayerInvestmentDto(pNum, amount, autoBet));
         }
-        return history;
+
+        return List.of(new RoundHistoryDto(lastCompletedRound, row));
     }
 
     private GameStateResponse buildGameStateResponse(

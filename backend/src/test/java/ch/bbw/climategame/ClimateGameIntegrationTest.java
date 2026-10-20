@@ -102,6 +102,11 @@ class ClimateGameIntegrationTest {
             if (round < 10) {
                 assertThat(advanced.currentRound()).isEqualTo(round + 1);
                 assertThat(advanced.status()).isEqualTo(SessionStatus.RUNNING);
+
+                // Verify player only sees the single last completed round in history
+                GameStateResponse stateInNextRound = gameEngineService.getPlayerGameState(joinedPlayers.get(0).sessionToken());
+                assertThat(stateInNextRound.history()).hasSize(1);
+                assertThat(stateInNextRound.history().get(0).round()).isEqualTo(round);
             } else {
                 assertThat(advanced.status()).isEqualTo(SessionStatus.FINISHED);
             }

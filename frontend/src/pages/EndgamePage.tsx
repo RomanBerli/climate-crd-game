@@ -1,6 +1,5 @@
 import React from 'react';
 import { GameStateResponse } from '../types/game';
-import { HistoryTable } from '../components/player/HistoryTable';
 import { leaveLobby } from '../api/gameApi';
 
 interface EndgamePageProps {
@@ -17,7 +16,7 @@ export const EndgamePage: React.FC<EndgamePageProps> = ({
   gameState,
   onResetSession,
 }) => {
-  const { player, sessionCode, endgame, history, groupSize } = gameState;
+  const { player, sessionCode, endgame } = gameState;
   const payoutRappen = endgame ? endgame.finalPayoutRappen : player.finalPayoutRappen ?? 0;
 
   const isSuccess = endgame?.isGoalReached === true;
@@ -75,12 +74,6 @@ export const EndgamePage: React.FC<EndgamePageProps> = ({
             <span>Restguthaben vor Risiko-Prüfung: {player.currentBalanceRappen} Rappen</span>
           </div>
         </div>
-
-        <HistoryTable
-          history={history}
-          myPlayerNumber={player.playerNumber}
-          groupSize={groupSize}
-        />
 
         <div className="endgame-card__footer">
           <button type="button" className="btn btn--ghost" onClick={handleNewSession}>
