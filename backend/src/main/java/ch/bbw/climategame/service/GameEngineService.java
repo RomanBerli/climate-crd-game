@@ -315,6 +315,7 @@ public class GameEngineService {
                 session.getId(),
                 session.getCode(),
                 session.getStatus(),
+                session.getGameMode(),
                 session.getRiskLevel(),
                 riskPercent,
                 session.getTargetSumRappen(),

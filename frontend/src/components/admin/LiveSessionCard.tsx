@@ -45,8 +45,11 @@ export const LiveSessionCard: React.FC<LiveSessionCardProps> = ({
               <span className={`badge badge--status-${session.status.toLowerCase()}`}>
                 {session.status}
               </span>
+              <span className="badge badge--accent">
+                Modus: {session.gameMode === 'WITH_CONTRACTS' ? 'Mit Verträgen' : 'Normal'}
+              </span>
               <span className="badge badge--risk">
-                Treatment: {session.riskPercent}% Risiko
+                Risiko: {session.riskPercent}%
               </span>
               {session.status !== 'LOBBY' && (
                 <span className="badge badge--neutral">

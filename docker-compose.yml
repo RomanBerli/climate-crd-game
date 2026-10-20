@@ -27,6 +27,7 @@ services:
       ENV_START_AMOUNT: ${ENV_START_AMOUNT:-4}
       ENV_GROUP_SIZE: ${ENV_GROUP_SIZE:-6}
       ENV_TOTAL_ROUNDS: ${ENV_TOTAL_ROUNDS:-10}
+      ENV_RISK_LEVEL: ${ENV_RISK_LEVEL:-0.90}
     depends_on:
       postgres:
         condition: service_healthy

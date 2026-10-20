@@ -10,12 +10,9 @@ spring:
     show-sql: false
 
 app:
-  scheduling:
-    enabled: false
   admin-secret: "test_admin_secret"
   game:
     start-amount-chf: 4
     group-size: 6
     total-rounds: 10
-    regular-phase-seconds: 60
-    overtime-phase-seconds: 30
+    risk-level: 0.90

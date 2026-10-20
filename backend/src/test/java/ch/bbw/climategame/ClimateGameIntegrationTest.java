@@ -3,6 +3,7 @@ package ch.bbw.climategame;
 import ch.bbw.climategame.dto.response.AdminSessionResponse;
 import ch.bbw.climategame.dto.response.GameStateResponse;
 import ch.bbw.climategame.dto.response.JoinLobbyResponse;
+import ch.bbw.climategame.entity.GameMode;
 import ch.bbw.climategame.entity.SessionStatus;
 import ch.bbw.climategame.service.AdminService;
 import ch.bbw.climategame.service.GameEngineService;
@@ -14,7 +15,6 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -54,8 +54,10 @@ class ClimateGameIntegrationTest {
 
     @Test
     void fullMilinskiExperimentWithManualAdminRoundAdvanceAndCsvExport() {
-        AdminSessionResponse created = adminService.createSession(new BigDecimal("0.90"));
+        AdminSessionResponse created = adminService.createSession(GameMode.NORMAL);
         assertThat(created.code()).hasSize(4);
+        assertThat(created.gameMode()).isEqualTo(GameMode.NORMAL);
+        assertThat(created.riskPercent()).isEqualTo(90);
         assertThat(created.targetSumRappen()).isEqualTo(1200);
         assertThat(created.status()).isEqualTo(SessionStatus.LOBBY);
 

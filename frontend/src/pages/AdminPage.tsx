@@ -9,6 +9,7 @@ import { getStoredAdminSecret, setStoredAdminSecret } from '../api/client';
 import { useAdminPolling } from '../hooks/useAdminPolling';
 import { CreateSessionModal } from '../components/admin/CreateSessionModal';
 import { LiveSessionCard } from '../components/admin/LiveSessionCard';
+import { GameMode } from '../types/game';
 
 interface AdminPageProps {
   onBackToPlayerView: () => void;
@@ -73,10 +74,10 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBackToPlayerView }) => {
     setLoginInput('');
   };
 
-  const handleCreateSession = async (riskLevel: number) => {
+  const handleCreateSession = async (gameMode: GameMode) => {
     setActionError(null);
     try {
-      await createAdminSession(riskLevel, adminKey);
+      await createAdminSession(gameMode, adminKey);
       await refreshSessions();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Fehler beim Erstellen der Session.');

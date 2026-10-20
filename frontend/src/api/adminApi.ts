@@ -1,5 +1,5 @@
 import { apiRequest, getStoredAdminSecret } from './client';
-import { AdminSessionResponse } from '../types/game';
+import { AdminSessionResponse, GameMode } from '../types/game';
 
 function adminHeaders(customKey?: string): Record<string, string> {
   return {
@@ -15,12 +15,12 @@ export async function fetchAdminSessionById(sessionId: string, adminKey?: string
   return apiRequest<AdminSessionResponse>(`/api/admin/sessions/${sessionId}`, { method: 'GET' }, adminHeaders(adminKey));
 }
 
-export async function createAdminSession(riskLevel: number, adminKey?: string): Promise<AdminSessionResponse> {
+export async function createAdminSession(gameMode: GameMode = 'NORMAL', adminKey?: string): Promise<AdminSessionResponse> {
   return apiRequest<AdminSessionResponse>(
     '/api/admin/sessions',
     {
       method: 'POST',
-      body: JSON.stringify({ riskLevel }),
+      body: JSON.stringify({ gameMode }),
     },
     adminHeaders(adminKey)
   );

@@ -2,6 +2,7 @@ package ch.bbw.climategame.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @ConfigurationProperties(prefix = "app")
@@ -30,8 +31,7 @@ public class AppProperties {
         private double startAmountChf = 4.0;
         private int groupSize = 6;
         private int totalRounds = 10;
-        private int regularPhaseSeconds = 60;
-        private int overtimePhaseSeconds = 30;
+        private BigDecimal riskLevel = new BigDecimal("0.90");
 
         public double getStartAmountChf() {
             return startAmountChf;
@@ -57,20 +57,12 @@ public class AppProperties {
             this.totalRounds = totalRounds;
         }
 
-        public int getRegularPhaseSeconds() {
-            return regularPhaseSeconds;
+        public BigDecimal getRiskLevel() {
+            return riskLevel;
         }
 
-        public void setRegularPhaseSeconds(int regularPhaseSeconds) {
-            this.regularPhaseSeconds = regularPhaseSeconds;
-        }
-
-        public int getOvertimePhaseSeconds() {
-            return overtimePhaseSeconds;
-        }
-
-        public void setOvertimePhaseSeconds(int overtimePhaseSeconds) {
-            this.overtimePhaseSeconds = overtimePhaseSeconds;
+        public void setRiskLevel(BigDecimal riskLevel) {
+            this.riskLevel = riskLevel;
         }
 
         public int getStartAmountRappen() {

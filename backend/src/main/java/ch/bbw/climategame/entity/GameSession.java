@@ -35,6 +35,10 @@ public class GameSession {
     @Column(name = "status", length = 20, nullable = false)
     private SessionStatus status = SessionStatus.LOBBY;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "game_mode", length = 30, nullable = false)
+    private GameMode gameMode = GameMode.NORMAL;
+
     @Column(name = "risk_level", precision = 4, scale = 2, nullable = false)
     private BigDecimal riskLevel;
 
@@ -104,6 +108,14 @@ public class GameSession {
 
     public void setStatus(SessionStatus status) {
         this.status = status;
+    }
+
+    public GameMode getGameMode() {
+        return gameMode;
+    }
+
+    public void setGameMode(GameMode gameMode) {
+        this.gameMode = gameMode;
     }
 
     public BigDecimal getRiskLevel() {

@@ -1,5 +1,6 @@
 package ch.bbw.climategame.dto.response;
 
+import ch.bbw.climategame.entity.GameMode;
 import ch.bbw.climategame.entity.SessionStatus;
 
 import java.math.BigDecimal;
@@ -14,6 +15,7 @@ public record GameStateResponse(
         UUID sessionId,
         String sessionCode,
         SessionStatus status,
+        GameMode gameMode,
         BigDecimal riskLevel,
         int riskPercent,
         int targetSumRappen,

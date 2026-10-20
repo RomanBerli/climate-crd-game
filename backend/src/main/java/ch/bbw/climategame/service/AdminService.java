@@ -2,6 +2,7 @@ package ch.bbw.climategame.service;
 
 import ch.bbw.climategame.config.AppProperties;
 import ch.bbw.climategame.dto.response.AdminSessionResponse;
+import ch.bbw.climategame.entity.GameMode;
 import ch.bbw.climategame.entity.GameSession;
 import ch.bbw.climategame.entity.Player;
 import ch.bbw.climategame.entity.RoundInvestment;
@@ -51,18 +52,25 @@ public class AdminService {
     }
 
     @Transactional
-    public AdminSessionResponse createSession(BigDecimal riskLevel) {
-        if (riskLevel == null || riskLevel.compareTo(BigDecimal.ZERO) < 0 || riskLevel.compareTo(BigDecimal.ONE) > 0) {
+    public AdminSessionResponse createSession(GameMode requestedMode) {
+        GameMode mode = requestedMode != null ? requestedMode : GameMode.NORMAL;
+        if (mode == GameMode.WITH_CONTRACTS) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Risiko-Level muss zwischen 0.00 und 1.00 liegen (z.B. 0.90, 0.50, 0.10)."
+                    "Der Spielmodus 'Mit Verträgen' ist aktuell noch nicht freigeschaltet."
             );
+        }
+
+        BigDecimal configuredRisk = appProperties.getGame().getRiskLevel();
+        if (configuredRisk == null || configuredRisk.compareTo(BigDecimal.ZERO) < 0 || configuredRisk.compareTo(BigDecimal.ONE) > 0) {
+            configuredRisk = new BigDecimal("0.90");
         }
 
         GameSession session = new GameSession();
         session.setCode(generateUniqueRoomCode());
         session.setStatus(SessionStatus.LOBBY);
-        session.setRiskLevel(riskLevel.setScale(2, RoundingMode.HALF_UP));
+        session.setGameMode(mode);
+        session.setRiskLevel(configuredRisk.setScale(2, RoundingMode.HALF_UP));
         session.setCurrentRound(0);
         session.setTargetSumRappen(appProperties.getGame().getTargetSumRappen());
         session.setTotalPotRappen(0);
@@ -239,6 +247,7 @@ public class AdminService {
                 session.getId(),
                 session.getCode(),
                 session.getStatus(),
+                session.getGameMode(),
                 session.getRiskLevel(),
                 riskPercent,
                 session.getCurrentRound(),

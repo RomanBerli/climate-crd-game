@@ -23,5 +23,4 @@ app:
     start-amount-chf: ${ENV_START_AMOUNT:4}
     group-size: ${ENV_GROUP_SIZE:6}
     total-rounds: ${ENV_TOTAL_ROUNDS:10}
-    regular-phase-seconds: ${ENV_REGULAR_PHASE_SECONDS:60}
-    overtime-phase-seconds: ${ENV_OVERTIME_PHASE_SECONDS:30}
+    risk-level: ${ENV_RISK_LEVEL:0.90}

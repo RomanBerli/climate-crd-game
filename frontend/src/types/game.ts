@@ -1,4 +1,5 @@
 export type SessionStatus = 'LOBBY' | 'RUNNING' | 'FINISHED';
+export type GameMode = 'NORMAL' | 'WITH_CONTRACTS';
 
 export interface JoinLobbyResponse {
   sessionId: string;
@@ -53,6 +54,7 @@ export interface GameStateResponse {
   sessionId: string;
   sessionCode: string;
   status: SessionStatus;
+  gameMode: GameMode;
   riskLevel: number;
   riskPercent: number;
   targetSumRappen: number;
@@ -78,6 +80,7 @@ export interface AdminSessionResponse {
   id: string;
   code: string;
   status: SessionStatus;
+  gameMode: GameMode;
   riskLevel: number;
   riskPercent: number;
   currentRound: number;

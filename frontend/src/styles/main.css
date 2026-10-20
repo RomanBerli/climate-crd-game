@@ -982,8 +982,13 @@ body {
   margin: 1.25rem 0;
 }
 
+.treatment-options--two-cols {
+  grid-template-columns: repeat(2, 1fr);
+}
+
 @media (max-width: 850px) {
-  .treatment-options {
+  .treatment-options,
+  .treatment-options--two-cols {
     grid-template-columns: 1fr;
   }
 }
@@ -1002,6 +1007,11 @@ body {
 .treatment-option--selected {
   border-color: var(--accent-emerald);
   background: rgba(16, 185, 129, 0.08);
+}
+
+.treatment-option--disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .treatment-option div {

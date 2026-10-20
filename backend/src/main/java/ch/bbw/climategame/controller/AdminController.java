@@ -2,8 +2,8 @@ package ch.bbw.climategame.controller;
 
 import ch.bbw.climategame.dto.request.CreateSessionRequest;
 import ch.bbw.climategame.dto.response.AdminSessionResponse;
+import ch.bbw.climategame.entity.GameMode;
 import ch.bbw.climategame.service.AdminService;
-import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -35,9 +35,10 @@ public class AdminController {
 
     @PostMapping("/sessions")
     public ResponseEntity<AdminSessionResponse> createSession(
-            @Valid @RequestBody CreateSessionRequest request
+            @RequestBody(required = false) CreateSessionRequest request
     ) {
-        AdminSessionResponse created = adminService.createSession(request.riskLevel());
+        GameMode mode = request != null && request.gameMode() != null ? request.gameMode() : GameMode.NORMAL;
+        AdminSessionResponse created = adminService.createSession(mode);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
