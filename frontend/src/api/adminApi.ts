@@ -34,17 +34,9 @@ export async function startAdminSession(sessionId: string, adminKey?: string): P
   );
 }
 
-export async function pauseAdminSession(sessionId: string, adminKey?: string): Promise<AdminSessionResponse> {
+export async function advanceAdminRound(sessionId: string, adminKey?: string): Promise<AdminSessionResponse> {
   return apiRequest<AdminSessionResponse>(
-    `/api/admin/sessions/${sessionId}/pause`,
-    { method: 'POST' },
-    adminHeaders(adminKey)
-  );
-}
-
-export async function resumeAdminSession(sessionId: string, adminKey?: string): Promise<AdminSessionResponse> {
-  return apiRequest<AdminSessionResponse>(
-    `/api/admin/sessions/${sessionId}/resume`,
+    `/api/admin/sessions/${sessionId}/next-round`,
     { method: 'POST' },
     adminHeaders(adminKey)
   );

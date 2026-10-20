@@ -3,23 +3,21 @@ package ch.bbw.climategame;
 import ch.bbw.climategame.dto.response.AdminSessionResponse;
 import ch.bbw.climategame.dto.response.GameStateResponse;
 import ch.bbw.climategame.dto.response.JoinLobbyResponse;
-import ch.bbw.climategame.entity.GameSession;
-import ch.bbw.climategame.entity.RoundPhase;
 import ch.bbw.climategame.entity.SessionStatus;
-import ch.bbw.climategame.repository.GameSessionRepository;
 import ch.bbw.climategame.service.AdminService;
 import ch.bbw.climategame.service.GameEngineService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -31,11 +29,8 @@ class ClimateGameIntegrationTest {
     @Autowired
     private GameEngineService gameEngineService;
 
-    @Autowired
-    private GameSessionRepository sessionRepository;
-
     @Test
-    void fullMilinskiExperimentGoalReachedAndCsvExport() {
+    void fullMilinskiExperimentWithManualAdminRoundAdvanceAndCsvExport() {
         AdminSessionResponse created = adminService.createSession(new BigDecimal("0.90"));
         assertThat(created.code()).hasSize(4);
         assertThat(created.targetSumRappen()).isEqualTo(1200);
@@ -52,49 +47,42 @@ class ClimateGameIntegrationTest {
         AdminSessionResponse started = adminService.startSession(created.id());
         assertThat(started.status()).isEqualTo(SessionStatus.RUNNING);
         assertThat(started.currentRound()).isEqualTo(1);
-        assertThat(started.roundPhase()).isEqualTo(RoundPhase.REGULAR);
+        assertThat(started.canAdvanceRound()).isFalse();
 
-        // Pause & Resume verification
-        AdminSessionResponse paused = adminService.pauseSession(created.id());
-        assertThat(paused.status()).isEqualTo(SessionStatus.PAUSED);
-        assertThat(paused.isPaused()).isTrue();
-
-        GameStateResponse pausedPlayerState = gameEngineService.getPlayerGameState(joinedPlayers.get(0).sessionToken());
-        assertThat(pausedPlayerState.isPaused()).isTrue();
-
-        AdminSessionResponse resumed = adminService.resumeSession(created.id());
-        assertThat(resumed.status()).isEqualTo(SessionStatus.RUNNING);
-        assertThat(resumed.isPaused()).isFalse();
-
-        // Play rounds 1 to 9 manually (each player invests 20 Rappen -> 120 Rappen per round)
-        for (int round = 1; round <= 9; round++) {
-            for (JoinLobbyResponse p : joinedPlayers) {
-                gameEngineService.submitInvestment(p.sessionToken(), 20);
+        // Play all 10 rounds: Admin advances round only after all 6 players have chosen
+        for (int round = 1; round <= 10; round++) {
+            for (int i = 0; i < 5; i++) {
+                gameEngineService.submitInvestment(joinedPlayers.get(i).sessionToken(), 20);
             }
-            GameStateResponse stateAfterRound = gameEngineService.getPlayerGameState(joinedPlayers.get(0).sessionToken());
-            assertThat(stateAfterRound.currentRound()).isEqualTo(round + 1);
-            assertThat(stateAfterRound.history()).hasSize(round);
+
+            // Only 5/6 players have chosen -> Admin cannot advance round yet
+            AdminSessionResponse partialAdminState = adminService.getSession(created.id());
+            assertThat(partialAdminState.readyPlayersCount()).isEqualTo(5);
+            assertThat(partialAdminState.canAdvanceRound()).isFalse();
+            assertThatThrownBy(() -> adminService.advanceRound(created.id()))
+                    .isInstanceOf(ResponseStatusException.class);
+
+            // 6th player submits
+            gameEngineService.submitInvestment(joinedPlayers.get(5).sessionToken(), 20);
+
+            // Round does not advance automatically until Admin clicks "Nächste Runde"
+            GameStateResponse stateBeforeAdminClick = gameEngineService.getPlayerGameState(joinedPlayers.get(0).sessionToken());
+            assertThat(stateBeforeAdminClick.currentRound()).isEqualTo(round);
+            assertThat(stateBeforeAdminClick.status()).isEqualTo(SessionStatus.RUNNING);
+
+            AdminSessionResponse readyAdminState = adminService.getSession(created.id());
+            assertThat(readyAdminState.readyPlayersCount()).isEqualTo(6);
+            assertThat(readyAdminState.canAdvanceRound()).isTrue();
+
+            // Admin clicks next round (or finishes after round 10)
+            AdminSessionResponse advanced = adminService.advanceRound(created.id());
+            if (round < 10) {
+                assertThat(advanced.currentRound()).isEqualTo(round + 1);
+                assertThat(advanced.status()).isEqualTo(SessionStatus.RUNNING);
+            } else {
+                assertThat(advanced.status()).isEqualTo(SessionStatus.FINISHED);
+            }
         }
-
-        // In Round 10: test Overtime + Auto-Bet for Player 6 while Players 1-5 invest 20 Rappen
-        for (int i = 0; i < 5; i++) {
-            gameEngineService.submitInvestment(joinedPlayers.get(i).sessionToken(), 20);
-        }
-
-        // Expire Regular deadline -> transitions to OVERTIME
-        GameSession sessionEntity = sessionRepository.findById(created.id()).orElseThrow();
-        sessionEntity.setRoundDeadline(Instant.now().minusSeconds(1));
-        sessionRepository.save(sessionEntity);
-        gameEngineService.processSessionTimerTick(created.id());
-
-        GameStateResponse overtimeState = gameEngineService.getPlayerGameState(joinedPlayers.get(5).sessionToken());
-        assertThat(overtimeState.roundPhase()).isEqualTo(RoundPhase.OVERTIME);
-
-        // Expire Overtime deadline -> triggers Auto-Bet (20 Rappen) for Player 6 and resolves Round 10
-        sessionEntity = sessionRepository.findById(created.id()).orElseThrow();
-        sessionEntity.setRoundDeadline(Instant.now().minusSeconds(1));
-        sessionRepository.save(sessionEntity);
-        gameEngineService.processSessionTimerTick(created.id());
 
         // Check final state
         GameStateResponse finalState = gameEngineService.getPlayerGameState(joinedPlayers.get(5).sessionToken());

@@ -6,26 +6,21 @@ interface LiveSessionCardProps {
   session: AdminSessionResponse;
   adminKey: string;
   onStart: (sessionId: string) => Promise<void>;
-  onPause: (sessionId: string) => Promise<void>;
-  onResume: (sessionId: string) => Promise<void>;
+  onAdvanceRound: (sessionId: string) => Promise<void>;
 }
 
 export const LiveSessionCard: React.FC<LiveSessionCardProps> = ({
   session,
   adminKey,
   onStart,
-  onPause,
-  onResume,
+  onAdvanceRound,
 }) => {
   const [busy, setBusy] = useState<boolean>(false);
 
   const canStart =
     session.status === 'LOBBY' && session.connectedPlayersCount >= session.groupSize;
 
-  const potPercent = Math.min(
-    100,
-    Math.round((session.totalPotRappen / session.targetSumRappen) * 100)
-  );
+  const isLastRound = session.currentRound >= session.totalRounds;
 
   const runAction = async (fn: () => Promise<void>) => {
     if (busy) return;
@@ -55,16 +50,19 @@ export const LiveSessionCard: React.FC<LiveSessionCardProps> = ({
               </span>
               {session.status !== 'LOBBY' && (
                 <span className="badge badge--neutral">
-                  Runde {session.currentRound} / {session.totalRounds} ({session.roundPhase})
+                  Runde {session.currentRound} / {session.totalRounds}
                 </span>
               )}
             </div>
             <p className="admin-session-card__meta">
               Spieler verbunden: <strong>{session.connectedPlayersCount} / {session.groupSize}</strong>
-              {(session.status === 'RUNNING' || session.status === 'PAUSED') && (
+              {session.status === 'RUNNING' && (
                 <>
                   {' '}
-                  • Restzeit Runde: <strong>{session.remainingSeconds}s</strong>
+                  • Bereit in Runde {session.currentRound}:{' '}
+                  <strong>
+                    {session.readyPlayersCount} / {session.groupSize} Spieler
+                  </strong>
                 </>
               )}
             </p>
@@ -91,22 +89,20 @@ export const LiveSessionCard: React.FC<LiveSessionCardProps> = ({
           {session.status === 'RUNNING' && (
             <button
               type="button"
-              className="btn btn--warning"
-              disabled={busy}
-              onClick={() => runAction(() => onPause(session.id))}
-            >
-              ⏸ Pause (Freeze)
-            </button>
-          )}
-
-          {session.status === 'PAUSED' && (
-            <button
-              type="button"
               className="btn btn--primary"
-              disabled={busy}
-              onClick={() => runAction(() => onResume(session.id))}
+              disabled={!session.canAdvanceRound || busy}
+              onClick={() => runAction(() => onAdvanceRound(session.id))}
+              title={
+                session.canAdvanceRound
+                  ? isLastRound
+                    ? 'Runde 10 abschliessen und Auszahlung berechnen'
+                    : `Runde ${session.currentRound + 1} starten`
+                  : `Warten bis alle ${session.groupSize} Spieler gewählt haben (${session.readyPlayersCount}/${session.groupSize})`
+              }
             >
-              ▶ Spiel fortsetzen
+              {isLastRound
+                ? `🏁 Experiment abschliessen (${session.readyPlayersCount}/${session.groupSize})`
+                : `⏭ Nächste Runde (${session.readyPlayersCount}/${session.groupSize} bereit)`}
             </button>
           )}
 
@@ -118,14 +114,13 @@ export const LiveSessionCard: React.FC<LiveSessionCardProps> = ({
         </div>
       </div>
 
-      {/* Nur für den Versuchsleiter sichtbar: Kollektives Klimakonto */}
-      <div className="admin-pot-monitor">
-        <div className="admin-pot-monitor__labels">
-          <span>
-            <strong>Klimakonto (Nur für Admin sichtbar):</strong> {session.totalPotRappen} /{' '}
-            {session.targetSumRappen} Rappen ({potPercent}%)
-          </span>
-          {session.status === 'FINISHED' && (
+      {session.status === 'FINISHED' && (
+        <div className="admin-pot-monitor">
+          <div className="admin-pot-monitor__labels">
+            <span>
+              <strong>Endstand Klimakonto:</strong> {session.totalPotRappen} /{' '}
+              {session.targetSumRappen} Rappen
+            </span>
             <span className="admin-pot-monitor__outcome">
               {session.isGoalReached
                 ? '✓ Klimaziel erreicht'
@@ -133,15 +128,9 @@ export const LiveSessionCard: React.FC<LiveSessionCardProps> = ({
                 ? `✗ Ziel verfehlt & ${session.riskPercent}% Risiko eingetreten (Totalverlust)`
                 : '⚠ Ziel verfehlt, aber Glück beim Risiko-Wurf (Guthaben erhalten)'}
             </span>
-          )}
+          </div>
         </div>
-        <div className="admin-pot-monitor__bar">
-          <div
-            className="admin-pot-monitor__fill"
-            style={{ width: `${potPercent}%` }}
-          />
-        </div>
-      </div>
+      )}
 
       <div className="admin-players-grid">
         {session.players.map((p) => (
@@ -165,21 +154,19 @@ export const LiveSessionCard: React.FC<LiveSessionCardProps> = ({
                 {!p.isConnected
                   ? 'Frei'
                   : session.status === 'LOBBY'
-                  ? 'In Lobby'
+                  ? '✓ In Lobby'
+                  : session.status === 'FINISHED'
+                  ? 'Abgeschlossen'
                   : p.isReadyCurrentRound
-                  ? `Bereit (${p.currentRoundInvestmentRappen ?? 0} Rp.)`
-                  : 'Wartet...'}
+                  ? '✓ Hat gewählt'
+                  : '⏳ Überlegt...'}
               </span>
             </div>
-            {p.isConnected && (
+            {p.isConnected && session.status === 'FINISHED' && (
               <div className="admin-player-box__details">
-                <span>Restguthaben: <strong>{p.currentBalanceRappen} Rp.</strong></span>
-                <span>Eingezahlt: {p.totalInvestedRappen} Rp.</span>
-                {session.status === 'FINISHED' && (
-                  <span className="admin-player-box__payout">
-                    Auszahlung: <strong>{p.finalPayoutRappen ?? 0} Rappen</strong>
-                  </span>
-                )}
+                <span className="admin-player-box__payout">
+                  Auszahlung: <strong>{p.finalPayoutRappen ?? 0} Rappen</strong>
+                </span>
               </div>
             )}
           </div>

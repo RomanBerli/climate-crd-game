@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import {
+  advanceAdminRound,
   createAdminSession,
-  pauseAdminSession,
-  resumeAdminSession,
   startAdminSession,
 } from '../api/adminApi';
 import { getStoredAdminSecret, setStoredAdminSecret } from '../api/client';
@@ -44,23 +43,13 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBackToPlayerView }) => {
     }
   };
 
-  const handlePause = async (sessionId: string) => {
+  const handleAdvanceRound = async (sessionId: string) => {
     setActionError(null);
     try {
-      await pauseAdminSession(sessionId, adminKey);
+      await advanceAdminRound(sessionId, adminKey);
       await refreshSessions();
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Fehler beim Pausieren.');
-    }
-  };
-
-  const handleResume = async (sessionId: string) => {
-    setActionError(null);
-    try {
-      await resumeAdminSession(sessionId, adminKey);
-      await refreshSessions();
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Fehler beim Fortsetzen.');
+      setActionError(err instanceof Error ? err.message : 'Fehler beim Weiterschalten der Runde.');
     }
   };
 
@@ -111,8 +100,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBackToPlayerView }) => {
               session={session}
               adminKey={adminKey}
               onStart={handleStart}
-              onPause={handlePause}
-              onResume={handleResume}
+              onAdvanceRound={handleAdvanceRound}
             />
           ))
         )}

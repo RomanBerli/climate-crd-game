@@ -2,7 +2,6 @@ package ch.bbw.climategame.service;
 
 import ch.bbw.climategame.config.AppProperties;
 import ch.bbw.climategame.dto.response.AdminSessionResponse;
-import ch.bbw.climategame.dto.response.RoundHistoryDto;
 import ch.bbw.climategame.entity.GameSession;
 import ch.bbw.climategame.entity.Player;
 import ch.bbw.climategame.entity.RoundInvestment;
@@ -19,7 +18,6 @@ import org.springframework.web.server.ResponseStatusException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.security.SecureRandom;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -112,12 +110,40 @@ public class AdminService {
         session.setCurrentRound(1);
         session.setRoundPhase(RoundPhase.REGULAR);
         session.setRoundStartTime(now);
-        session.setRoundDeadline(now.plusSeconds(appProperties.getGame().getRegularPhaseSeconds()));
+        session.setRoundDeadline(null);
         session.setPausedAt(null);
         session.setPauseRemainingMs(null);
 
         GameSession saved = sessionRepository.save(session);
         return buildAdminSessionResponse(saved);
+    }
+
+    @Transactional
+    public AdminSessionResponse advanceRound(UUID sessionId) {
+        GameSession session = sessionRepository.findByIdForUpdate(sessionId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session nicht gefunden."));
+
+        if (session.getStatus() != SessionStatus.RUNNING) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Die Runde kann nur im laufenden Spielstatus (RUNNING) weitergeschaltet werden."
+            );
+        }
+
+        int currentRound = session.getCurrentRound();
+        int requiredGroupSize = appProperties.getGame().getGroupSize();
+        int submittedCount = investmentRepository.countBySessionIdAndRoundNumber(session.getId(), currentRound);
+
+        if (submittedCount < requiredGroupSize) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Runde " + currentRound + " kann erst weitergeklickt werden, wenn alle " + requiredGroupSize
+                            + " Spieler gewählt haben (aktuell: " + submittedCount + "/" + requiredGroupSize + ")."
+            );
+        }
+
+        gameEngineService.advanceRoundOrFinish(session);
+        return buildAdminSessionResponse(session);
     }
 
     @Transactional
@@ -129,14 +155,8 @@ public class AdminService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Nur laufende Sessions können pausiert werden.");
         }
 
-        Instant now = Instant.now();
-        long remainingMs = 0L;
-        if (session.getRoundDeadline() != null) {
-            remainingMs = Math.max(0L, Duration.between(now, session.getRoundDeadline()).toMillis());
-        }
-
-        session.setPausedAt(now);
-        session.setPauseRemainingMs(remainingMs);
+        session.setPausedAt(Instant.now());
+        session.setPauseRemainingMs(null);
         session.setStatus(SessionStatus.PAUSED);
 
         GameSession saved = sessionRepository.save(session);
@@ -152,12 +172,6 @@ public class AdminService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Session ist nicht pausiert.");
         }
 
-        Instant now = Instant.now();
-        long remainingMs = session.getPauseRemainingMs() != null
-                ? session.getPauseRemainingMs()
-                : appProperties.getGame().getRegularPhaseSeconds() * 1000L;
-
-        session.setRoundDeadline(now.plusMillis(remainingMs));
         session.setPausedAt(null);
         session.setPauseRemainingMs(null);
         session.setStatus(SessionStatus.RUNNING);
@@ -208,39 +222,43 @@ public class AdminService {
 
     private AdminSessionResponse buildAdminSessionResponse(GameSession session) {
         List<Player> players = playerRepository.findBySessionIdOrderByPlayerNumberAsc(session.getId());
-        List<RoundInvestment> investments = investmentRepository
-                .findBySessionIdOrderByRoundNumberAscPlayerNumberAsc(session.getId());
+        int currentRound = session.getCurrentRound();
+
+        List<RoundInvestment> currentRoundInvestmentsList = currentRound > 0
+                ? investmentRepository.findBySessionIdAndRoundNumberOrderByPlayerNumberAsc(session.getId(), currentRound)
+                : List.of();
 
         int groupSize = appProperties.getGame().getGroupSize();
         int totalRounds = appProperties.getGame().getTotalRounds();
-        int currentRound = session.getCurrentRound();
 
         Map<Integer, Player> playerByNumber = players.stream()
                 .collect(Collectors.toMap(Player::getPlayerNumber, p -> p));
 
-        Map<Integer, RoundInvestment> currentRoundInvestments = investments.stream()
-                .filter(inv -> inv.getRoundNumber() == currentRound)
+        Map<Integer, RoundInvestment> currentRoundInvestments = currentRoundInvestmentsList.stream()
                 .collect(Collectors.toMap(RoundInvestment::getPlayerNumber, inv -> inv, (a, b) -> a));
 
         List<AdminSessionResponse.AdminPlayerDto> adminPlayers = new ArrayList<>();
-        int defaultInitialBalance = appProperties.getGame().getStartAmountRappen();
+        int readyPlayersCount = 0;
 
         for (int pNum = 1; pNum <= groupSize; pNum++) {
             Player p = playerByNumber.get(pNum);
             RoundInvestment currentInv = currentRoundInvestments.get(pNum);
             if (p != null) {
-                boolean isReady = session.getStatus() == SessionStatus.LOBBY
-                        || session.getStatus() == SessionStatus.FINISHED
-                        || currentInv != null;
-                int totalInvested = p.getInitialBalanceRappen() - p.getCurrentBalanceRappen();
+                boolean isReady;
+                if (session.getStatus() == SessionStatus.LOBBY) {
+                    isReady = true;
+                } else if (session.getStatus() == SessionStatus.FINISHED) {
+                    isReady = true;
+                } else {
+                    isReady = currentInv != null;
+                }
+                if (isReady) {
+                    readyPlayersCount++;
+                }
                 adminPlayers.add(new AdminSessionResponse.AdminPlayerDto(
                         pNum,
                         true,
                         isReady,
-                        p.getInitialBalanceRappen(),
-                        p.getCurrentBalanceRappen(),
-                        totalInvested,
-                        currentInv != null ? currentInv.getAmountRappen() : null,
                         p.getFinalPayoutRappen(),
                         p.getLastSeenAt()
                 ));
@@ -249,17 +267,13 @@ public class AdminService {
                         pNum,
                         false,
                         false,
-                        defaultInitialBalance,
-                        defaultInitialBalance,
-                        0,
-                        null,
                         null,
                         null
                 ));
             }
         }
 
-        List<RoundHistoryDto> history = gameEngineService.buildCompletedRoundHistory(session, investments, groupSize);
+        boolean canAdvanceRound = session.getStatus() == SessionStatus.RUNNING && readyPlayersCount >= groupSize;
         int riskPercent = (int) Math.round(session.getRiskLevel().doubleValue() * 100.0);
 
         return new AdminSessionResponse(
@@ -270,19 +284,18 @@ public class AdminService {
                 riskPercent,
                 session.getCurrentRound(),
                 totalRounds,
-                session.getRoundPhase(),
-                gameEngineService.calculateRemainingSeconds(session),
                 session.getStatus() == SessionStatus.PAUSED,
                 session.getTargetSumRappen(),
                 session.getTotalPotRappen(),
                 players.size(),
+                readyPlayersCount,
                 groupSize,
+                canAdvanceRound,
                 session.getIsGoalReached(),
                 session.getRiskOccurred(),
                 session.getCreatedAt(),
                 session.getUpdatedAt(),
-                adminPlayers,
-                history
+                adminPlayers
         );
     }
 

@@ -5,6 +5,7 @@ interface InvestmentButtonsProps {
   allowedOptions: number[];
   hasSubmitted: boolean;
   submittedAmount: number | null;
+  allPlayersReady: boolean;
   isPaused: boolean;
   onInvest: (amountRappen: number) => Promise<void>;
 }
@@ -29,6 +30,7 @@ export const InvestmentButtons: React.FC<InvestmentButtonsProps> = ({
   allowedOptions,
   hasSubmitted,
   submittedAmount,
+  allPlayersReady,
   isPaused,
   onInvest,
 }) => {
@@ -60,7 +62,11 @@ export const InvestmentButtons: React.FC<InvestmentButtonsProps> = ({
           <div className="investment-confirmed__icon">✓</div>
           <div>
             <h3>Einsatz für diese Runde eingeloggt: {submittedAmount} Rappen</h3>
-            <p>Sobald alle 6 Spieler gewählt haben, startet automatisch die nächste Runde.</p>
+            <p>
+              {allPlayersReady
+                ? 'Alle 6 Spieler haben gewählt. Warten auf Freigabe der nächsten Runde durch den Versuchsleiter...'
+                : 'Ihre Auswahl ist gespeichert. Warten auf die verbleibenden Mitspieler...'}
+            </p>
           </div>
         </div>
       ) : (

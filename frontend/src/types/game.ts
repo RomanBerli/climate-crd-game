@@ -74,10 +74,6 @@ export interface AdminPlayerDto {
   playerNumber: number;
   isConnected: boolean;
   isReadyCurrentRound: boolean;
-  initialBalanceRappen: number;
-  currentBalanceRappen: number;
-  totalInvestedRappen: number;
-  currentRoundInvestmentRappen: number | null;
   finalPayoutRappen: number | null;
   lastSeenAt: string | null;
 }
@@ -90,17 +86,16 @@ export interface AdminSessionResponse {
   riskPercent: number;
   currentRound: number;
   totalRounds: number;
-  roundPhase: RoundPhase;
-  remainingSeconds: number;
   isPaused: boolean;
   targetSumRappen: number;
   totalPotRappen: number;
   connectedPlayersCount: number;
+  readyPlayersCount: number;
   groupSize: number;
+  canAdvanceRound: boolean;
   isGoalReached: boolean | null;
   riskOccurred: boolean | null;
   createdAt: string;
   updatedAt: string;
   players: AdminPlayerDto[];
-  history: RoundHistoryDto[];
 }

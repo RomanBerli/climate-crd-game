@@ -32,7 +32,6 @@ export const App: React.FC = () => {
 
   const {
     gameState,
-    displaySeconds,
     loading,
     refreshNow,
     setGameStateDirectly,
@@ -57,7 +56,6 @@ export const App: React.FC = () => {
     return (
       <GamePage
         gameState={gameState}
-        displaySeconds={displaySeconds}
         onStateUpdated={setGameStateDirectly}
       />
     );

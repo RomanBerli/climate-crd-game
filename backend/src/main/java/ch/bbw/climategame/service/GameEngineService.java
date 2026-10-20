@@ -20,10 +20,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -181,12 +179,7 @@ public class GameEngineService {
 
         recordInvestmentInternal(session, tokenPlayer, currentRound, amountRappen, false);
 
-        int groupSize = appProperties.getGame().getGroupSize();
-        int submittedCount = investmentRepository.countBySessionIdAndRoundNumber(session.getId(), currentRound);
-        if (submittedCount >= groupSize) {
-            advanceRoundOrFinish(session);
-        }
-
+        // Kein automatischer Rundenwechsel: Der Admin klickt die Runde im Dashboard weiter, sobald alle 6 Spieler gewählt haben.
         List<Player> allPlayers = playerRepository.findBySessionIdOrderByPlayerNumberAsc(session.getId());
         List<RoundInvestment> allInvestments = investmentRepository.findBySessionIdOrderByRoundNumberAscPlayerNumberAsc(session.getId());
         Player updatedPlayer = allPlayers.stream()
@@ -198,54 +191,21 @@ public class GameEngineService {
     }
 
     @Transactional
-    public void processSessionTimerTick(UUID sessionId) {
-        Optional<GameSession> sessionOpt = sessionRepository.findByIdForUpdate(sessionId);
-        if (sessionOpt.isEmpty()) {
-            return;
-        }
-        GameSession session = sessionOpt.get();
-        if (session.getStatus() != SessionStatus.RUNNING || session.getRoundDeadline() == null) {
-            return;
-        }
-
-        Instant now = Instant.now();
-        int currentRound = session.getCurrentRound();
-        int groupSize = appProperties.getGame().getGroupSize();
-
-        // Falls bereits alle Spieler gewählt haben, sofort weiter
-        int submittedCount = investmentRepository.countBySessionIdAndRoundNumber(session.getId(), currentRound);
-        if (submittedCount >= groupSize) {
-            advanceRoundOrFinish(session);
-            return;
-        }
-
-        if (now.isBefore(session.getRoundDeadline())) {
-            return;
-        }
-
-        if (session.getRoundPhase() == RoundPhase.REGULAR) {
-            // Übergang von 60s Regular Phase in 30s Overtime Phase
-            session.setRoundPhase(RoundPhase.OVERTIME);
-            session.setRoundDeadline(now.plusSeconds(appProperties.getGame().getOvertimePhaseSeconds()));
+    public void advanceRoundOrFinish(GameSession session) {
+        int totalRounds = appProperties.getGame().getTotalRounds();
+        if (session.getCurrentRound() < totalRounds) {
+            Instant now = Instant.now();
+            session.setCurrentRound(session.getCurrentRound() + 1);
+            session.setRoundPhase(RoundPhase.REGULAR);
+            session.setRoundStartTime(now);
+            session.setRoundDeadline(null);
             sessionRepository.save(session);
         } else {
-            // 30s Overtime Phase abgelaufen -> Auto-Bet (20 Rappen / INVEST_OPTION_1) für alle fehlenden Spieler
-            List<Player> players = playerRepository.findBySessionIdOrderByPlayerNumberAsc(session.getId());
-            List<RoundInvestment> roundInvestments = investmentRepository
-                    .findBySessionIdAndRoundNumberOrderByPlayerNumberAsc(session.getId(), currentRound);
-            Set<Integer> submittedPlayerNumbers = roundInvestments.stream()
-                    .map(RoundInvestment::getPlayerNumber)
-                    .collect(Collectors.toSet());
-
-            int autoBetAmount = appProperties.getGame().getInvestOption1Rappen();
-            for (Player player : players) {
-                if (!submittedPlayerNumbers.contains(player.getPlayerNumber())) {
-                    int actualAutoBet = Math.min(autoBetAmount, player.getCurrentBalanceRappen());
-                    recordInvestmentInternal(session, player, currentRound, actualAutoBet, true);
-                }
-            }
-
-            advanceRoundOrFinish(session);
+            List<Player> allPlayers = playerRepository.findBySessionIdOrderByPlayerNumberAsc(session.getId());
+            List<RoundInvestment> allInvestments = investmentRepository.findBySessionIdOrderByRoundNumberAscPlayerNumberAsc(session.getId());
+            payoutService.resolveEndgame(session, allPlayers, allInvestments);
+            playerRepository.saveAll(allPlayers);
+            sessionRepository.save(session);
         }
     }
 
@@ -273,36 +233,6 @@ public class GameEngineService {
 
         session.setTotalPotRappen(session.getTotalPotRappen() + amountRappen);
         sessionRepository.save(session);
-    }
-
-    private void advanceRoundOrFinish(GameSession session) {
-        int totalRounds = appProperties.getGame().getTotalRounds();
-        if (session.getCurrentRound() < totalRounds) {
-            Instant now = Instant.now();
-            session.setCurrentRound(session.getCurrentRound() + 1);
-            session.setRoundPhase(RoundPhase.REGULAR);
-            session.setRoundStartTime(now);
-            session.setRoundDeadline(now.plusSeconds(appProperties.getGame().getRegularPhaseSeconds()));
-            sessionRepository.save(session);
-        } else {
-            List<Player> allPlayers = playerRepository.findBySessionIdOrderByPlayerNumberAsc(session.getId());
-            List<RoundInvestment> allInvestments = investmentRepository.findBySessionIdOrderByRoundNumberAscPlayerNumberAsc(session.getId());
-            payoutService.resolveEndgame(session, allPlayers, allInvestments);
-            playerRepository.saveAll(allPlayers);
-            sessionRepository.save(session);
-        }
-    }
-
-    public int calculateRemainingSeconds(GameSession session) {
-        if (session.getStatus() == SessionStatus.PAUSED) {
-            long ms = session.getPauseRemainingMs() != null ? session.getPauseRemainingMs() : 0L;
-            return (int) Math.max(0L, (ms + 999L) / 1000L);
-        }
-        if (session.getStatus() == SessionStatus.RUNNING && session.getRoundDeadline() != null) {
-            long ms = Duration.between(Instant.now(), session.getRoundDeadline()).toMillis();
-            return (int) Math.max(0L, (ms + 999L) / 1000L);
-        }
-        return 0;
     }
 
     public List<RoundHistoryDto> buildCompletedRoundHistory(
@@ -407,7 +337,7 @@ public class GameEngineService {
                 session.getCurrentRound(),
                 totalRounds,
                 session.getRoundPhase(),
-                calculateRemainingSeconds(session),
+                0,
                 session.getStatus() == SessionStatus.PAUSED,
                 allPlayers.size(),
                 groupSize,

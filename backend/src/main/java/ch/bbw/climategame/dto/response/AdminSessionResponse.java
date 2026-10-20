@@ -1,6 +1,5 @@
 package ch.bbw.climategame.dto.response;
 
-import ch.bbw.climategame.entity.RoundPhase;
 import ch.bbw.climategame.entity.SessionStatus;
 
 import java.math.BigDecimal;
@@ -16,28 +15,23 @@ public record AdminSessionResponse(
         int riskPercent,
         int currentRound,
         int totalRounds,
-        RoundPhase roundPhase,
-        int remainingSeconds,
         boolean isPaused,
         int targetSumRappen,
         int totalPotRappen,
         int connectedPlayersCount,
+        int readyPlayersCount,
         int groupSize,
+        boolean canAdvanceRound,
         Boolean isGoalReached,
         Boolean riskOccurred,
         Instant createdAt,
         Instant updatedAt,
-        List<AdminPlayerDto> players,
-        List<RoundHistoryDto> history
+        List<AdminPlayerDto> players
 ) {
     public record AdminPlayerDto(
             int playerNumber,
             boolean isConnected,
             boolean isReadyCurrentRound,
-            int initialBalanceRappen,
-            int currentBalanceRappen,
-            int totalInvestedRappen,
-            Integer currentRoundInvestmentRappen,
             Integer finalPayoutRappen,
             Instant lastSeenAt
     ) {

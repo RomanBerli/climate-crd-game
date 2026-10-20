@@ -71,22 +71,13 @@ public class AdminController {
         return ResponseEntity.ok(adminService.startSession(id));
     }
 
-    @PostMapping("/sessions/{id}/pause")
-    public ResponseEntity<AdminSessionResponse> pauseSession(
+    @PostMapping("/sessions/{id}/next-round")
+    public ResponseEntity<AdminSessionResponse> advanceRound(
             @RequestHeader(value = "X-Admin-Key", required = false) String adminKey,
             @PathVariable UUID id
     ) {
         verifyAdminKey(adminKey, null);
-        return ResponseEntity.ok(adminService.pauseSession(id));
-    }
-
-    @PostMapping("/sessions/{id}/resume")
-    public ResponseEntity<AdminSessionResponse> resumeSession(
-            @RequestHeader(value = "X-Admin-Key", required = false) String adminKey,
-            @PathVariable UUID id
-    ) {
-        verifyAdminKey(adminKey, null);
-        return ResponseEntity.ok(adminService.resumeSession(id));
+        return ResponseEntity.ok(adminService.advanceRound(id));
     }
 
     @GetMapping(value = "/sessions/{id}/export.csv", produces = "text/csv;charset=UTF-8")
