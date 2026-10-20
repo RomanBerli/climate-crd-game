@@ -7,7 +7,7 @@ import java.util.List;
 @ConfigurationProperties(prefix = "app")
 public class AppProperties {
 
-    private String adminSecret = "admin_geheim_123";
+    private String adminSecret;
     private GameConfig game = new GameConfig();
 
     public String getAdminSecret() {

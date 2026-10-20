@@ -18,7 +18,7 @@ spring:
           time_zone: UTC
 
 app:
-  admin-secret: ${APP_ADMIN_SECRET:admin_geheim_123}
+  admin-secret: ${APP_ADMIN_SECRET:}
   game:
     start-amount-chf: ${ENV_START_AMOUNT:4}
     group-size: ${ENV_GROUP_SIZE:6}

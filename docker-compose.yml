@@ -23,10 +23,10 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/climatedb
       SPRING_DATASOURCE_USERNAME: climate_user
       SPRING_DATASOURCE_PASSWORD: climate_password
-      APP_ADMIN_SECRET: "admin_geheim_123"
-      ENV_START_AMOUNT: 4
-      ENV_GROUP_SIZE: 6
-      ENV_TOTAL_ROUNDS: 10
+      APP_ADMIN_SECRET: ${APP_ADMIN_SECRET:-admin_geheim_123}
+      ENV_START_AMOUNT: ${ENV_START_AMOUNT:-4}
+      ENV_GROUP_SIZE: ${ENV_GROUP_SIZE:-6}
+      ENV_TOTAL_ROUNDS: ${ENV_TOTAL_ROUNDS:-10}
     depends_on:
       postgres:
         condition: service_healthy

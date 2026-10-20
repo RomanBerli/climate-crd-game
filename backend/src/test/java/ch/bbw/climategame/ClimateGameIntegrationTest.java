@@ -8,8 +8,10 @@ import ch.bbw.climategame.service.AdminService;
 import ch.bbw.climategame.service.GameEngineService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
@@ -18,8 +20,11 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
+@AutoConfigureMockMvc
 @ActiveProfiles("test")
 class ClimateGameIntegrationTest {
 
@@ -28,6 +33,24 @@ class ClimateGameIntegrationTest {
 
     @Autowired
     private GameEngineService gameEngineService;
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Test
+    void adminEndpointsRequireValidSpringSecurityAuthentication() throws Exception {
+        // Without header -> 401 Unauthorized
+        mockMvc.perform(get("/api/admin/sessions"))
+                .andExpect(status().isUnauthorized());
+
+        // With wrong header -> 401 Unauthorized
+        mockMvc.perform(get("/api/admin/sessions").header("X-Admin-Key", "wrong_secret"))
+                .andExpect(status().isUnauthorized());
+
+        // With valid env secret ("test_admin_secret") -> 200 OK
+        mockMvc.perform(get("/api/admin/sessions").header("X-Admin-Key", "test_admin_secret"))
+                .andExpect(status().isOk());
+    }
 
     @Test
     void fullMilinskiExperimentWithManualAdminRoundAdvanceAndCsvExport() {
