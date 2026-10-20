@@ -1,0 +1,21 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+
+app:
+  scheduling:
+    enabled: false
+  admin-secret: "test_admin_secret"
+  game:
+    start-amount-chf: 4
+    group-size: 6
+    total-rounds: 10
+    regular-phase-seconds: 60
+    overtime-phase-seconds: 30

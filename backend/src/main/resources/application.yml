@@ -1,0 +1,27 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/climatedb}
+    username: ${SPRING_DATASOURCE_USERNAME:climate_user}
+    password: ${SPRING_DATASOURCE_PASSWORD:climate_password}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          time_zone: UTC
+
+app:
+  admin-secret: ${APP_ADMIN_SECRET:admin_geheim_123}
+  game:
+    start-amount-chf: ${ENV_START_AMOUNT:4}
+    group-size: ${ENV_GROUP_SIZE:6}
+    total-rounds: ${ENV_TOTAL_ROUNDS:10}
+    regular-phase-seconds: ${ENV_REGULAR_PHASE_SECONDS:60}
+    overtime-phase-seconds: ${ENV_OVERTIME_PHASE_SECONDS:30}

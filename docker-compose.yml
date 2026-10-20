@@ -1,0 +1,45 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: climate_db
+    environment:
+      POSTGRES_DB: climatedb
+      POSTGRES_USER: climate_user
+      POSTGRES_PASSWORD: climate_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U climate_user -d climatedb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    container_name: climate_backend
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/climatedb
+      SPRING_DATASOURCE_USERNAME: climate_user
+      SPRING_DATASOURCE_PASSWORD: climate_password
+      APP_ADMIN_SECRET: "admin_geheim_123"
+      ENV_START_AMOUNT: 4
+      ENV_GROUP_SIZE: 6
+      ENV_TOTAL_ROUNDS: 10
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+
+  frontend:
+    build: ./frontend
+    container_name: climate_frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:

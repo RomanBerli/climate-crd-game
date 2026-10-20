@@ -1,0 +1,7 @@
+-Zeit abbauen, nur Admin kann weiterklicken
+-Geld im Pot anzeigen
+-Nur letzte runde anzeigen bei den anderen
+-Franken
+-Styling Kürzer
+-Telefonnummer für Twint
+-Feedback Fragebogen (vor resultat)
