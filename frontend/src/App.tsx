@@ -52,7 +52,7 @@ export const App: React.FC = () => {
   }
 
   // Reconnect & State Routing (Spec 4.2 & Plan 3.5)
-  if (gameState && (gameState.status === 'RUNNING' || gameState.status === 'PAUSED')) {
+  if (gameState && gameState.status === 'RUNNING') {
     return (
       <GamePage
         gameState={gameState}

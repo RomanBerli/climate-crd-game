@@ -1,6 +1,5 @@
 package ch.bbw.climategame.dto.response;
 
-import ch.bbw.climategame.entity.RoundPhase;
 import ch.bbw.climategame.entity.SessionStatus;
 
 import java.math.BigDecimal;
@@ -20,9 +19,6 @@ public record GameStateResponse(
         int targetSumRappen,
         int currentRound,
         int totalRounds,
-        RoundPhase roundPhase,
-        int remainingSeconds,
-        boolean isPaused,
         int connectedPlayersCount,
         int groupSize,
         PlayerStateDto player,

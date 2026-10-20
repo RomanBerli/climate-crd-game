@@ -41,21 +41,8 @@ public class GameSession {
     @Column(name = "current_round", nullable = false)
     private int currentRound = 0;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "round_phase", length = 20, nullable = false)
-    private RoundPhase roundPhase = RoundPhase.REGULAR;
-
     @Column(name = "round_start_time")
     private Instant roundStartTime;
-
-    @Column(name = "round_deadline")
-    private Instant roundDeadline;
-
-    @Column(name = "paused_at")
-    private Instant pausedAt;
-
-    @Column(name = "pause_remaining_ms")
-    private Long pauseRemainingMs;
 
     @Column(name = "target_sum_rappen", nullable = false)
     private int targetSumRappen;
@@ -135,44 +122,12 @@ public class GameSession {
         this.currentRound = currentRound;
     }
 
-    public RoundPhase getRoundPhase() {
-        return roundPhase;
-    }
-
-    public void setRoundPhase(RoundPhase roundPhase) {
-        this.roundPhase = roundPhase;
-    }
-
     public Instant getRoundStartTime() {
         return roundStartTime;
     }
 
     public void setRoundStartTime(Instant roundStartTime) {
         this.roundStartTime = roundStartTime;
-    }
-
-    public Instant getRoundDeadline() {
-        return roundDeadline;
-    }
-
-    public void setRoundDeadline(Instant roundDeadline) {
-        this.roundDeadline = roundDeadline;
-    }
-
-    public Instant getPausedAt() {
-        return pausedAt;
-    }
-
-    public void setPausedAt(Instant pausedAt) {
-        this.pausedAt = pausedAt;
-    }
-
-    public Long getPauseRemainingMs() {
-        return pauseRemainingMs;
-    }
-
-    public void setPauseRemainingMs(Long pauseRemainingMs) {
-        this.pauseRemainingMs = pauseRemainingMs;
     }
 
     public int getTargetSumRappen() {

@@ -6,7 +6,6 @@ interface InvestmentButtonsProps {
   hasSubmitted: boolean;
   submittedAmount: number | null;
   allPlayersReady: boolean;
-  isPaused: boolean;
   onInvest: (amountRappen: number) => Promise<void>;
 }
 
@@ -31,13 +30,12 @@ export const InvestmentButtons: React.FC<InvestmentButtonsProps> = ({
   hasSubmitted,
   submittedAmount,
   allPlayersReady,
-  isPaused,
   onInvest,
 }) => {
   const [submittingAmount, setSubmittingAmount] = useState<number | null>(null);
 
   const handleSelect = async (amount: number) => {
-    if (hasSubmitted || isPaused || submittingAmount !== null) return;
+    if (hasSubmitted || submittingAmount !== null) return;
     setSubmittingAmount(amount);
     try {
       await onInvest(amount);
@@ -84,7 +82,7 @@ export const InvestmentButtons: React.FC<InvestmentButtonsProps> = ({
                 key={amount}
                 type="button"
                 className={`invest-btn invest-btn--${amount}`}
-                disabled={!isAllowed || isPaused || submittingAmount !== null}
+                disabled={!isAllowed || submittingAmount !== null}
                 onClick={() => handleSelect(amount)}
               >
                 <span className="invest-btn__amount">{meta.title}</span>

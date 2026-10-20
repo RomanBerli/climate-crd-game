@@ -15,7 +15,6 @@ public record AdminSessionResponse(
         int riskPercent,
         int currentRound,
         int totalRounds,
-        boolean isPaused,
         int targetSumRappen,
         int totalPotRappen,
         int connectedPlayersCount,

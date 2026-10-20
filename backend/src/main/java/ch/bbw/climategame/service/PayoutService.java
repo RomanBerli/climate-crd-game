@@ -51,9 +51,6 @@ public class PayoutService {
         }
 
         session.setStatus(SessionStatus.FINISHED);
-        session.setRoundDeadline(null);
-        session.setPausedAt(null);
-        session.setPauseRemainingMs(null);
     }
 
     public EndgameResultDto buildEndgameResultDto(GameSession session, Player player) {

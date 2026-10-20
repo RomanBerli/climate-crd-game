@@ -1,5 +1,4 @@
-export type SessionStatus = 'LOBBY' | 'RUNNING' | 'PAUSED' | 'FINISHED';
-export type RoundPhase = 'REGULAR' | 'OVERTIME';
+export type SessionStatus = 'LOBBY' | 'RUNNING' | 'FINISHED';
 
 export interface JoinLobbyResponse {
   sessionId: string;
@@ -59,9 +58,6 @@ export interface GameStateResponse {
   targetSumRappen: number;
   currentRound: number;
   totalRounds: number;
-  roundPhase: RoundPhase;
-  remainingSeconds: number;
-  isPaused: boolean;
   connectedPlayersCount: number;
   groupSize: number;
   player: PlayerStateDto;
@@ -86,7 +82,6 @@ export interface AdminSessionResponse {
   riskPercent: number;
   currentRound: number;
   totalRounds: number;
-  isPaused: boolean;
   targetSumRappen: number;
   totalPotRappen: number;
   connectedPlayersCount: number;

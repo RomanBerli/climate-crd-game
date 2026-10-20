@@ -5,7 +5,6 @@ import ch.bbw.climategame.dto.response.AdminSessionResponse;
 import ch.bbw.climategame.entity.GameSession;
 import ch.bbw.climategame.entity.Player;
 import ch.bbw.climategame.entity.RoundInvestment;
-import ch.bbw.climategame.entity.RoundPhase;
 import ch.bbw.climategame.entity.SessionStatus;
 import ch.bbw.climategame.repository.GameSessionRepository;
 import ch.bbw.climategame.repository.PlayerRepository;
@@ -65,7 +64,6 @@ public class AdminService {
         session.setStatus(SessionStatus.LOBBY);
         session.setRiskLevel(riskLevel.setScale(2, RoundingMode.HALF_UP));
         session.setCurrentRound(0);
-        session.setRoundPhase(RoundPhase.REGULAR);
         session.setTargetSumRappen(appProperties.getGame().getTargetSumRappen());
         session.setTotalPotRappen(0);
 
@@ -105,14 +103,9 @@ public class AdminService {
             );
         }
 
-        Instant now = Instant.now();
         session.setStatus(SessionStatus.RUNNING);
         session.setCurrentRound(1);
-        session.setRoundPhase(RoundPhase.REGULAR);
-        session.setRoundStartTime(now);
-        session.setRoundDeadline(null);
-        session.setPausedAt(null);
-        session.setPauseRemainingMs(null);
+        session.setRoundStartTime(Instant.now());
 
         GameSession saved = sessionRepository.save(session);
         return buildAdminSessionResponse(saved);
@@ -144,40 +137,6 @@ public class AdminService {
 
         gameEngineService.advanceRoundOrFinish(session);
         return buildAdminSessionResponse(session);
-    }
-
-    @Transactional
-    public AdminSessionResponse pauseSession(UUID sessionId) {
-        GameSession session = sessionRepository.findByIdForUpdate(sessionId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session nicht gefunden."));
-
-        if (session.getStatus() != SessionStatus.RUNNING) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Nur laufende Sessions können pausiert werden.");
-        }
-
-        session.setPausedAt(Instant.now());
-        session.setPauseRemainingMs(null);
-        session.setStatus(SessionStatus.PAUSED);
-
-        GameSession saved = sessionRepository.save(session);
-        return buildAdminSessionResponse(saved);
-    }
-
-    @Transactional
-    public AdminSessionResponse resumeSession(UUID sessionId) {
-        GameSession session = sessionRepository.findByIdForUpdate(sessionId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session nicht gefunden."));
-
-        if (session.getStatus() != SessionStatus.PAUSED) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Session ist nicht pausiert.");
-        }
-
-        session.setPausedAt(null);
-        session.setPauseRemainingMs(null);
-        session.setStatus(SessionStatus.RUNNING);
-
-        GameSession saved = sessionRepository.save(session);
-        return buildAdminSessionResponse(saved);
     }
 
     @Transactional(readOnly = true)
@@ -284,7 +243,6 @@ public class AdminService {
                 riskPercent,
                 session.getCurrentRound(),
                 totalRounds,
-                session.getStatus() == SessionStatus.PAUSED,
                 session.getTargetSumRappen(),
                 session.getTotalPotRappen(),
                 players.size(),

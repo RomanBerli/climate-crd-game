@@ -10,7 +10,6 @@ import ch.bbw.climategame.dto.response.RoundHistoryDto;
 import ch.bbw.climategame.entity.GameSession;
 import ch.bbw.climategame.entity.Player;
 import ch.bbw.climategame.entity.RoundInvestment;
-import ch.bbw.climategame.entity.RoundPhase;
 import ch.bbw.climategame.entity.SessionStatus;
 import ch.bbw.climategame.repository.GameSessionRepository;
 import ch.bbw.climategame.repository.PlayerRepository;
@@ -150,9 +149,6 @@ public class GameEngineService {
         GameSession session = sessionRepository.findByIdForUpdate(tokenPlayer.getSession().getId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session nicht gefunden."));
 
-        if (session.getStatus() == SessionStatus.PAUSED) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Das Spiel ist derzeit durch den Versuchsleiter pausiert.");
-        }
         if (session.getStatus() != SessionStatus.RUNNING) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Investitionen sind nur während einer aktiven Runde möglich.");
         }
@@ -177,7 +173,7 @@ public class GameEngineService {
             );
         }
 
-        recordInvestmentInternal(session, tokenPlayer, currentRound, amountRappen, false);
+        recordInvestmentInternal(session, tokenPlayer, currentRound, amountRappen);
 
         // Kein automatischer Rundenwechsel: Der Admin klickt die Runde im Dashboard weiter, sobald alle 6 Spieler gewählt haben.
         List<Player> allPlayers = playerRepository.findBySessionIdOrderByPlayerNumberAsc(session.getId());
@@ -194,11 +190,8 @@ public class GameEngineService {
     public void advanceRoundOrFinish(GameSession session) {
         int totalRounds = appProperties.getGame().getTotalRounds();
         if (session.getCurrentRound() < totalRounds) {
-            Instant now = Instant.now();
             session.setCurrentRound(session.getCurrentRound() + 1);
-            session.setRoundPhase(RoundPhase.REGULAR);
-            session.setRoundStartTime(now);
-            session.setRoundDeadline(null);
+            session.setRoundStartTime(Instant.now());
             sessionRepository.save(session);
         } else {
             List<Player> allPlayers = playerRepository.findBySessionIdOrderByPlayerNumberAsc(session.getId());
@@ -213,8 +206,7 @@ public class GameEngineService {
             GameSession session,
             Player player,
             int roundNumber,
-            int amountRappen,
-            boolean isAutoBet
+            int amountRappen
     ) {
         RoundInvestment investment = new RoundInvestment();
         investment.setSession(session);
@@ -222,13 +214,11 @@ public class GameEngineService {
         investment.setRoundNumber(roundNumber);
         investment.setPlayerNumber(player.getPlayerNumber());
         investment.setAmountRappen(amountRappen);
-        investment.setAutoBet(isAutoBet);
+        investment.setAutoBet(false);
         investmentRepository.save(investment);
 
         player.setCurrentBalanceRappen(player.getCurrentBalanceRappen() - amountRappen);
-        if (!isAutoBet) {
-            player.setLastSeenAt(Instant.now());
-        }
+        player.setLastSeenAt(Instant.now());
         playerRepository.save(player);
 
         session.setTotalPotRappen(session.getTotalPotRappen() + amountRappen);
@@ -330,9 +320,6 @@ public class GameEngineService {
                 session.getTargetSumRappen(),
                 session.getCurrentRound(),
                 totalRounds,
-                session.getRoundPhase(),
-                0,
-                session.getStatus() == SessionStatus.PAUSED,
                 allPlayers.size(),
                 groupSize,
                 playerDto,

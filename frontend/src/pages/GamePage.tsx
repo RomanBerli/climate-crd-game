@@ -49,7 +49,6 @@ export const GamePage: React.FC<GamePageProps> = ({
             hasSubmitted={gameState.player.hasSubmittedCurrentRound}
             submittedAmount={gameState.player.currentRoundInvestmentRappen}
             allPlayersReady={allPlayersReady}
-            isPaused={false}
             onInvest={handleInvest}
           />
 
