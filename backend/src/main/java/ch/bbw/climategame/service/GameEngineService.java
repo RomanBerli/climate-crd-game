@@ -244,15 +244,21 @@ public class GameEngineService {
                 ));
 
         List<RoundHistoryDto.PlayerInvestmentDto> row = new ArrayList<>();
-        // Statische Reihenfolge Spieler 1 bis 6 (Spec 1.4) - nur die unmittelbar letzte Runde!
+        int roundTotalRappen = 0;
         for (int pNum = 1; pNum <= groupSize; pNum++) {
             RoundInvestment inv = roundMap.get(pNum);
             int amount = inv != null ? inv.getAmountRappen() : 0;
             boolean autoBet = inv != null && inv.isAutoBet();
+            roundTotalRappen += amount;
             row.add(new RoundHistoryDto.PlayerInvestmentDto(pNum, amount, autoBet));
         }
 
-        return List.of(new RoundHistoryDto(lastCompletedRound, row));
+        int cumulativePotRappen = allInvestments.stream()
+                .filter(inv -> inv.getRoundNumber() <= lastCompletedRound)
+                .mapToInt(RoundInvestment::getAmountRappen)
+                .sum();
+
+        return List.of(new RoundHistoryDto(lastCompletedRound, roundTotalRappen, cumulativePotRappen, row));
     }
 
     private GameStateResponse buildGameStateResponse(
@@ -311,6 +317,14 @@ public class GameEngineService {
         EndgameResultDto endgameDto = payoutService.buildEndgameResultDto(session, player);
         int riskPercent = (int) Math.round(session.getRiskLevel().doubleValue() * 100.0);
 
+        // Gesamtfonds nach abgeschlossenen Runden (damit während der laufenden Runde keine Live-Bets anderer Spieler geleakt werden)
+        int visibleTotalPotRappen = session.getStatus() == SessionStatus.FINISHED
+                ? session.getTotalPotRappen()
+                : allInvestments.stream()
+                        .filter(inv -> inv.getRoundNumber() < currentRound)
+                        .mapToInt(RoundInvestment::getAmountRappen)
+                        .sum();
+
         return new GameStateResponse(
                 session.getId(),
                 session.getCode(),
@@ -319,6 +333,7 @@ public class GameEngineService {
                 session.getRiskLevel(),
                 riskPercent,
                 session.getTargetSumRappen(),
+                visibleTotalPotRappen,
                 session.getCurrentRound(),
                 totalRounds,
                 allPlayers.size(),

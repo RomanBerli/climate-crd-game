@@ -61,6 +61,7 @@ export const GamePage: React.FC<GamePageProps> = ({
             history={gameState.history}
             myPlayerNumber={gameState.player.playerNumber}
             groupSize={gameState.groupSize}
+            targetSumRappen={gameState.targetSumRappen}
           />
         </div>
 

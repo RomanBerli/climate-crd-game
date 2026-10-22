@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { GameStateResponse } from '../types/game';
 import { joinLobby, leaveLobby } from '../api/gameApi';
+import { formatFr } from '../utils/currency';
 
 interface LobbyPageProps {
   gameState: GameStateResponse | null;
@@ -49,7 +50,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
           <div className="lobby-waiting-card__badges">
             <span className="badge badge--accent">Spieler {gameState.player.playerNumber}</span>
             <span className="badge badge--neutral">Raumcode: {gameState.sessionCode}</span>
-            <span className="badge badge--risk">Risiko-Treatment: {gameState.riskPercent}%</span>
+            <span className="badge badge--risk">Risiko: {gameState.riskPercent}%</span>
           </div>
 
           <h1>Warteraum – Sie sind Spieler {gameState.player.playerNumber}</h1>
@@ -61,18 +62,18 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
             <h3>Experiment-Regeln im Überblick</h3>
             <ul>
               <li>
-                <strong>Ihr Startkapital:</strong> {gameState.player.initialBalanceRappen} Rappen
+                <strong>Ihr Startkapital:</strong> {formatFr(gameState.player.initialBalanceRappen)}
               </li>
               <li>
-                <strong>Dauer:</strong> {gameState.totalRounds} Runden (pro Runde wählbar: 0, 20 oder 40 Rappen)
+                <strong>Dauer:</strong> {gameState.totalRounds} Runden (pro Runde wählbar: 0 Fr., 0.2 Fr. oder 0.4 Fr.)
               </li>
               <li>
                 <strong>Gemeinsames Klimaziel der {gameState.groupSize}er-Gruppe:</strong>{' '}
-                {gameState.targetSumRappen} Rappen nach {gameState.totalRounds} Runden
+                {formatFr(gameState.targetSumRappen)} nach {gameState.totalRounds} Runden
               </li>
               <li>
                 <strong>Risiko bei Verfehlen des Ziels:</strong> Mit{' '}
-                <strong>{gameState.riskPercent}% Wahrscheinlichkeit</strong> verlieren alle Spieler ihr gesamtes Restguthaben (0 Rappen).
+                <strong>{gameState.riskPercent}% Wahrscheinlichkeit</strong> verlieren alle Spieler ihr gesamtes Restguthaben (0 Fr.).
               </li>
             </ul>
           </div>

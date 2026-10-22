@@ -33,6 +33,8 @@ export interface PlayerInvestmentDto {
 
 export interface RoundHistoryDto {
   round: number;
+  roundTotalRappen: number;
+  cumulativePotRappen: number;
   investments: PlayerInvestmentDto[];
 }
 
@@ -47,9 +49,6 @@ export interface EndgameResultDto {
   message: string;
 }
 
-/**
- * Spieler-State (Spec 1.4: enthält niemals totalPotRappen oder kollektiven Fortschritt!)
- */
 export interface GameStateResponse {
   sessionId: string;
   sessionCode: string;
@@ -58,6 +57,7 @@ export interface GameStateResponse {
   riskLevel: number;
   riskPercent: number;
   targetSumRappen: number;
+  totalPotRappen: number;
   currentRound: number;
   totalRounds: number;
   connectedPlayersCount: number;

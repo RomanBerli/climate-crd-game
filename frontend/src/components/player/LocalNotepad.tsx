@@ -24,7 +24,7 @@ export const LocalNotepad: React.FC<LocalNotepadProps> = ({ notes, onChange }) =
         className="notepad-card__textarea"
         value={notes}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="Eigene Notizen & Rechnungen (z. B. bisherige Rundenbeiträge, Ziel 1200 Rappen)..."
+        placeholder="Eigene Notizen & Rechnungen (z. B. bisherige Rundenbeiträge, Ziel 12 Fr.)..."
         rows={12}
       />
     </aside>

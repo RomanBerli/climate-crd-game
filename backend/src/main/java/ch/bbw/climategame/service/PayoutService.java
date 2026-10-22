@@ -74,7 +74,7 @@ public class PayoutService {
             message = "Ziel verfehlt. Sie hatten Glück: Ihr Restguthaben bleibt erhalten.";
         } else {
             scenarioCode = "SCENARIO_C_GOAL_MISSED_LOSS";
-            message = "Ziel verfehlt. Ihr Geld ging durch das " + riskPercent + "% Risiko verloren. Auszahlung: 0 Rappen.";
+            message = "Ziel verfehlt. Ihr Geld ging durch das " + riskPercent + "% Risiko verloren. Auszahlung: 0 Fr.";
         }
 
         return new EndgameResultDto(

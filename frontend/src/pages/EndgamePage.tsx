@@ -1,6 +1,7 @@
 import React from 'react';
 import { GameStateResponse } from '../types/game';
 import { leaveLobby } from '../api/gameApi';
+import { formatFr } from '../utils/currency';
 
 interface EndgamePageProps {
   gameState: GameStateResponse;
@@ -8,9 +9,9 @@ interface EndgamePageProps {
 }
 
 /**
- * Statischer Milinski-Endbildschirm gemäss Spec 1.3, 2.1 & 6:
+ * Statischer Milinski-Endbildschirm:
  * Zeigt Spielernummer, Session-Code, unmissverständlichen Ergebnis-Textblock
- * und den auszuzahlenden Endbetrag in Rappen gross und deutlich an.
+ * und den auszuzahlenden Endbetrag in Franken gross und deutlich an.
  */
 export const EndgamePage: React.FC<EndgamePageProps> = ({
   gameState,
@@ -40,7 +41,7 @@ export const EndgamePage: React.FC<EndgamePageProps> = ({
             <strong className="endgame-id-box__value">{sessionCode}</strong>
           </div>
           <div className="endgame-id-box">
-            <span className="endgame-id-box__label">Risiko-Treatment</span>
+            <span className="endgame-id-box__label">Risiko-Wahrscheinlichkeit</span>
             <strong className="endgame-id-box__value">{gameState.riskPercent}% Risiko</strong>
           </div>
         </div>
@@ -65,13 +66,17 @@ export const EndgamePage: React.FC<EndgamePageProps> = ({
           <span className="endgame-payout-display__label">
             Ihr finaler Auszahlungsbetrag (Spieler {player.playerNumber} • Raum {sessionCode})
           </span>
-          <strong className="endgame-payout-display__amount">{payoutRappen} Rappen</strong>
+          <strong className="endgame-payout-display__amount">{formatFr(payoutRappen)}</strong>
           <div className="endgame-payout-display__breakdown">
-            <span>Startkapital: {player.initialBalanceRappen} Rappen</span>
+            <span>
+              Klimafonds Total: {formatFr(gameState.totalPotRappen)} / {formatFr(gameState.targetSumRappen)}
+            </span>
             <span>•</span>
-            <span>Ihre getätigten Einzahlungen: {player.ownTotalInvestedRappen} Rappen</span>
+            <span>Startkapital: {formatFr(player.initialBalanceRappen)}</span>
             <span>•</span>
-            <span>Restguthaben vor Risiko-Prüfung: {player.currentBalanceRappen} Rappen</span>
+            <span>Ihre getätigten Einzahlungen: {formatFr(player.ownTotalInvestedRappen)}</span>
+            <span>•</span>
+            <span>Restguthaben vor Risiko-Prüfung: {formatFr(player.currentBalanceRappen)}</span>
           </div>
         </div>
 

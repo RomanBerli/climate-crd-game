@@ -105,10 +105,13 @@ class ClimateGameIntegrationTest {
                 assertThat(advanced.currentRound()).isEqualTo(round + 1);
                 assertThat(advanced.status()).isEqualTo(SessionStatus.RUNNING);
 
-                // Verify player only sees the single last completed round in history
+                // Verify player only sees the single last completed round in history + total pot after round
                 GameStateResponse stateInNextRound = gameEngineService.getPlayerGameState(joinedPlayers.get(0).sessionToken());
                 assertThat(stateInNextRound.history()).hasSize(1);
                 assertThat(stateInNextRound.history().get(0).round()).isEqualTo(round);
+                assertThat(stateInNextRound.history().get(0).roundTotalRappen()).isEqualTo(120);
+                assertThat(stateInNextRound.history().get(0).cumulativePotRappen()).isEqualTo(round * 120);
+                assertThat(stateInNextRound.totalPotRappen()).isEqualTo(round * 120);
             } else {
                 assertThat(advanced.status()).isEqualTo(SessionStatus.FINISHED);
             }

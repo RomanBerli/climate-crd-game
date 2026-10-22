@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchGameState } from '../api/gameApi';
-import { ApiError, setStoredPlayerToken } from '../api/client';
+import { ApiError, getStoredPlayerToken, setStoredPlayerToken } from '../api/client';
 import { GameStateResponse } from '../types/game';
 
 interface UseGamePollingResult {
@@ -11,9 +11,9 @@ interface UseGamePollingResult {
   setGameStateDirectly: (state: GameStateResponse | null) => void;
 }
 
-export function useGamePolling(pollingEnabled: boolean = true): UseGamePollingResult {
+export function useGamePolling(enabled: boolean = true): UseGamePollingResult {
   const [gameState, setGameState] = useState<GameStateResponse | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(() => Boolean(getStoredPlayerToken()));
   const [error, setError] = useState<string | null>(null);
   const isFetchingRef = useRef<boolean>(false);
 
@@ -25,6 +25,11 @@ export function useGamePolling(pollingEnabled: boolean = true): UseGamePollingRe
   }, []);
 
   const refreshNow = useCallback(async () => {
+    if (!getStoredPlayerToken()) {
+      setGameState(null);
+      setLoading(false);
+      return;
+    }
     if (isFetchingRef.current) return;
     isFetchingRef.current = true;
     try {
@@ -44,19 +49,36 @@ export function useGamePolling(pollingEnabled: boolean = true): UseGamePollingRe
     }
   }, []);
 
+  // Einmaliger Reconnect-Check beim Laden, NUR falls ein gespeichertes Token vorhanden ist
   useEffect(() => {
-    if (!pollingEnabled) {
+    if (!enabled) {
       setLoading(false);
       return;
     }
+    if (getStoredPlayerToken()) {
+      refreshNow();
+    } else {
+      setLoading(false);
+    }
+  }, [enabled, refreshNow]);
 
-    refreshNow();
+  // Polling (alle 1200ms) NUR wenn der Spieler tatsächlich einem Raum beigetreten ist (Warteraum oder laufendes Spiel)
+  const shouldPoll =
+    enabled &&
+    gameState !== null &&
+    (gameState.status === 'LOBBY' || gameState.status === 'RUNNING');
+
+  useEffect(() => {
+    if (!shouldPoll) {
+      return;
+    }
+
     const pollInterval = window.setInterval(() => {
       refreshNow();
     }, 1200);
 
     return () => window.clearInterval(pollInterval);
-  }, [pollingEnabled, refreshNow]);
+  }, [shouldPoll, refreshNow]);
 
   return {
     gameState,

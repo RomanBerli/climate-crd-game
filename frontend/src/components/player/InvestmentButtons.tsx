@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { formatFr } from '../../utils/currency';
 
 interface InvestmentButtonsProps {
   currentBalanceRappen: number;
@@ -9,19 +10,10 @@ interface InvestmentButtonsProps {
   onInvest: (amountRappen: number) => Promise<void>;
 }
 
-const OPTION_METADATA: Record<number, { title: string; subtitle: string }> = {
-  0: {
-    title: '0 Rappen',
-    subtitle: 'Kein Beitrag in dieser Runde',
-  },
-  20: {
-    title: '20 Rappen',
-    subtitle: 'Mittlerer Beitrag (Fairer Anteil)',
-  },
-  40: {
-    title: '40 Rappen',
-    subtitle: 'Maximaler Rundenbeitrag',
-  },
+const OPTION_SUBTITLES: Record<number, string> = {
+  0: 'Kein Beitrag in dieser Runde',
+  20: 'Mittlerer Beitrag (Fairer Anteil)',
+  40: 'Maximaler Rundenbeitrag',
 };
 
 export const InvestmentButtons: React.FC<InvestmentButtonsProps> = ({
@@ -51,7 +43,7 @@ export const InvestmentButtons: React.FC<InvestmentButtonsProps> = ({
       <div className="investment-card__header">
         <h2>Beitrag für das Klimakonto wählen</h2>
         <p>
-          Verfügbares Guthaben: <strong>{currentBalanceRappen} Rappen</strong>
+          Verfügbares Guthaben: <strong>{formatFr(currentBalanceRappen)}</strong>
         </p>
       </div>
 
@@ -59,7 +51,7 @@ export const InvestmentButtons: React.FC<InvestmentButtonsProps> = ({
         <div className="investment-confirmed">
           <div className="investment-confirmed__icon">✓</div>
           <div>
-            <h3>Einsatz für diese Runde eingeloggt: {submittedAmount} Rappen</h3>
+            <h3>Einsatz für diese Runde eingeloggt: {formatFr(submittedAmount ?? 0)}</h3>
             <p>
               {allPlayersReady
                 ? 'Alle 6 Spieler haben gewählt. Warten auf Freigabe der nächsten Runde durch den Versuchsleiter...'
@@ -71,10 +63,7 @@ export const InvestmentButtons: React.FC<InvestmentButtonsProps> = ({
         <div className="investment-grid">
           {standardOptions.map((amount) => {
             const isAllowed = allowedOptions.includes(amount) && currentBalanceRappen >= amount;
-            const meta = OPTION_METADATA[amount] || {
-              title: `${amount} Rappen`,
-              subtitle: 'Beitrag',
-            };
+            const subtitle = OPTION_SUBTITLES[amount] || 'Beitrag';
             const isLoading = submittingAmount === amount;
 
             return (
@@ -85,8 +74,8 @@ export const InvestmentButtons: React.FC<InvestmentButtonsProps> = ({
                 disabled={!isAllowed || submittingAmount !== null}
                 onClick={() => handleSelect(amount)}
               >
-                <span className="invest-btn__amount">{meta.title}</span>
-                <span className="invest-btn__desc">{meta.subtitle}</span>
+                <span className="invest-btn__amount">{formatFr(amount)}</span>
+                <span className="invest-btn__desc">{subtitle}</span>
                 <span className="invest-btn__action">
                   {isLoading ? 'Wird gespeichert...' : 'Jetzt einzahlen →'}
                 </span>

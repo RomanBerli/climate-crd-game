@@ -1,21 +1,24 @@
 import React from 'react';
 import { RoundHistoryDto } from '../../types/game';
+import { formatFr } from '../../utils/currency';
 
 interface HistoryTableProps {
   history: RoundHistoryDto[];
   myPlayerNumber: number;
   groupSize: number;
+  targetSumRappen?: number;
 }
 
 /**
- * Statische Transparenz-Anzeige gemäss Spec 1.4:
- * Es wird ausschliesslich die unmittelbar letzte Runde angezeigt (Spieler 1 bis Spieler 6).
- * Für ältere Runden müssen sich die Spieler selbst Notizen im Notizblock machen.
+ * Statische Transparenz-Anzeige:
+ * Zeigt die Einzelbeiträge der unmittelbar letzten Runde (Spieler 1 bis Spieler 6)
+ * sowie das Runden-Total und den gesamten Stand des Klimafonds nach dieser Runde in Franken.
  */
 export const HistoryTable: React.FC<HistoryTableProps> = ({
   history,
   myPlayerNumber,
   groupSize,
+  targetSumRappen,
 }) => {
   const playerColumns = Array.from({ length: groupSize }, (_, i) => i + 1);
   const lastRoundEntry = history.length > 0 ? history[history.length - 1] : null;
@@ -25,17 +28,24 @@ export const HistoryTable: React.FC<HistoryTableProps> = ({
       <div className="history-card__header">
         <h3 className="section-title">
           {lastRoundEntry
-            ? `Rückblick: Einzelbeiträge der letzten Runde (Runde ${lastRoundEntry.round})`
-            : 'Rückblick: Letzte Runde'}
+            ? `Ergebnis der letzten Runde (Runde ${lastRoundEntry.round})`
+            : 'Ergebnis der letzten Runde'}
         </h3>
-        <span className="history-card__hint">
-          Nur die jeweils letzte Runde ist sichtbar – nutzen Sie Ihren Notizblock!
-        </span>
+        {lastRoundEntry ? (
+          <span className="badge badge--accent">
+            Klimafonds Total: {formatFr(lastRoundEntry.cumulativePotRappen)}
+            {targetSumRappen ? ` / ${formatFr(targetSumRappen)}` : ''}
+          </span>
+        ) : (
+          <span className="history-card__hint">
+            Klimafonds Startstand: 0 Fr.{targetSumRappen ? ` / ${formatFr(targetSumRappen)}` : ''}
+          </span>
+        )}
       </div>
 
       {!lastRoundEntry ? (
         <div className="history-empty">
-          Runde 1 läuft. Ab Runde 2 sehen Sie hier jeweils nur die Einzelinvestitionen der unmittelbar vorherigen Runde. Bitte notieren Sie sich wichtige Werte selbst im Notizblock!
+          Runde 1 läuft. Sobald Runde 1 abgeschlossen ist, sehen Sie hier die Einzelbeiträge der letzten Runde sowie den neuen Gesamtstand des Klimafonds.
         </div>
       ) : (
         <div className="history-table-wrapper">
@@ -52,6 +62,8 @@ export const HistoryTable: React.FC<HistoryTableProps> = ({
                     {pNum === myPlayerNumber ? ' (Sie)' : ''}
                   </th>
                 ))}
+                <th>Runden-Total</th>
+                <th>Fonds Total</th>
               </tr>
             </thead>
             <tbody>
@@ -70,11 +82,19 @@ export const HistoryTable: React.FC<HistoryTableProps> = ({
                       }`}
                     >
                       <span className={`amount-pill amount-pill--${amount}`}>
-                        {amount} Rp.
+                        {formatFr(amount)}
                       </span>
                     </td>
                   );
                 })}
+                <td className="history-table__round">
+                  <strong>+{formatFr(lastRoundEntry.roundTotalRappen)}</strong>
+                </td>
+                <td className="history-table__round">
+                  <strong style={{ color: '#34d399' }}>
+                    {formatFr(lastRoundEntry.cumulativePotRappen)}
+                  </strong>
+                </td>
               </tr>
             </tbody>
           </table>

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { AdminSessionResponse } from '../../types/game';
+import { formatFr } from '../../utils/currency';
 import { CsvExportButton } from './CsvExportButton';
 
 interface LiveSessionCardProps {
@@ -121,8 +122,8 @@ export const LiveSessionCard: React.FC<LiveSessionCardProps> = ({
         <div className="admin-pot-monitor">
           <div className="admin-pot-monitor__labels">
             <span>
-              <strong>Endstand Klimakonto:</strong> {session.totalPotRappen} /{' '}
-              {session.targetSumRappen} Rappen
+              <strong>Endstand Klimakonto:</strong> {formatFr(session.totalPotRappen)} /{' '}
+              {formatFr(session.targetSumRappen)}
             </span>
             <span className="admin-pot-monitor__outcome">
               {session.isGoalReached
@@ -168,7 +169,7 @@ export const LiveSessionCard: React.FC<LiveSessionCardProps> = ({
             {p.isConnected && session.status === 'FINISHED' && (
               <div className="admin-player-box__details">
                 <span className="admin-player-box__payout">
-                  Auszahlung: <strong>{p.finalPayoutRappen ?? 0} Rappen</strong>
+                  Auszahlung: <strong>{formatFr(p.finalPayoutRappen ?? 0)}</strong>
                 </span>
               </div>
             )}
