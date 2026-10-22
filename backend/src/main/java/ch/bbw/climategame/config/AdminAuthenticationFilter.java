@@ -4,6 +4,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -19,15 +20,15 @@ import java.util.List;
 
 /**
  * Prüft für Admin-Endpunkte den Header X-Admin-Key (oder Authorization: Bearer)
- * mittels zeitkonstantem Vergleich (MessageDigest.isEqual) gegen APP_ADMIN_SECRET.
+ * mittels zeitkonstantem Vergleich (MessageDigest.isEqual) gegen app.admin-secret aus application.yml.
  */
 @Component
 public class AdminAuthenticationFilter extends OncePerRequestFilter {
 
-    private final AppProperties appProperties;
+    private final String adminSecret;
 
-    public AdminAuthenticationFilter(AppProperties appProperties) {
-        this.appProperties = appProperties;
+    public AdminAuthenticationFilter(@Value("${app.admin-secret:}") String adminSecret) {
+        this.adminSecret = adminSecret;
     }
 
     @Override
@@ -36,7 +37,7 @@ public class AdminAuthenticationFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain
     ) throws ServletException, IOException {
-        String configuredSecret = appProperties.getAdminSecret();
+        String configuredSecret = this.adminSecret;
         String providedSecret = extractSecretFromRequest(request);
 
         if (configuredSecret != null && !configuredSecret.isBlank()

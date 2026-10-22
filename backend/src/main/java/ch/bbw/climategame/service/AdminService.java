@@ -1,6 +1,5 @@
 package ch.bbw.climategame.service;
 
-import ch.bbw.climategame.config.AppProperties;
 import ch.bbw.climategame.dto.response.AdminSessionResponse;
 import ch.bbw.climategame.entity.GameMode;
 import ch.bbw.climategame.entity.GameSession;
@@ -41,29 +40,26 @@ public class AdminService {
     private final RoundInvestmentRepository investmentRepository;
     private final PlayerSurveyRepository surveyRepository;
     private final GameEngineService gameEngineService;
-    private final AppProperties appProperties;
 
     public AdminService(
             GameSessionRepository sessionRepository,
             PlayerRepository playerRepository,
             RoundInvestmentRepository investmentRepository,
             PlayerSurveyRepository surveyRepository,
-            GameEngineService gameEngineService,
-            AppProperties appProperties
+            GameEngineService gameEngineService
     ) {
         this.sessionRepository = sessionRepository;
         this.playerRepository = playerRepository;
         this.investmentRepository = investmentRepository;
         this.surveyRepository = surveyRepository;
         this.gameEngineService = gameEngineService;
-        this.appProperties = appProperties;
     }
 
     @Transactional
     public AdminSessionResponse createSession(GameMode requestedMode) {
         GameMode mode = requestedMode != null ? requestedMode : GameMode.NORMAL;
 
-        BigDecimal configuredRisk = appProperties.getGame().getRiskLevel();
+        BigDecimal configuredRisk = gameEngineService.getRiskLevel();
         if (configuredRisk == null || configuredRisk.compareTo(BigDecimal.ZERO) < 0 || configuredRisk.compareTo(BigDecimal.ONE) > 0) {
             configuredRisk = new BigDecimal("0.90");
         }
@@ -77,7 +73,7 @@ public class AdminService {
         session.setContractAbolished(false);
         session.setRiskLevel(configuredRisk.setScale(2, RoundingMode.HALF_UP));
         session.setCurrentRound(0);
-        session.setTargetSumRappen(appProperties.getGame().getTargetSumRappen());
+        session.setTargetSumRappen(gameEngineService.getTargetSumRappen());
         session.setTotalPotRappen(0);
 
         GameSession saved = sessionRepository.save(session);
@@ -111,7 +107,7 @@ public class AdminService {
         }
 
         int connectedCount = playerRepository.countBySessionId(session.getId());
-        int requiredGroupSize = appProperties.getGame().getGroupSize();
+        int requiredGroupSize = gameEngineService.getGroupSize();
         if (connectedCount < requiredGroupSize) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
@@ -141,7 +137,7 @@ public class AdminService {
         }
 
         int currentRound = session.getCurrentRound();
-        int requiredGroupSize = appProperties.getGame().getGroupSize();
+        int requiredGroupSize = gameEngineService.getGroupSize();
         int submittedCount = investmentRepository.countBySessionIdAndRoundNumber(session.getId(), currentRound);
 
         if (submittedCount < requiredGroupSize) {
@@ -245,8 +241,8 @@ public class AdminService {
                 .map(PlayerSurvey::getPlayerNumber)
                 .collect(Collectors.toSet());
 
-        int groupSize = appProperties.getGame().getGroupSize();
-        int totalRounds = appProperties.getGame().getTotalRounds();
+        int groupSize = gameEngineService.getGroupSize();
+        int totalRounds = gameEngineService.getTotalRounds();
 
         Map<Integer, Player> playerByNumber = players.stream()
                 .collect(Collectors.toMap(Player::getPlayerNumber, p -> p));

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { formatFr } from '../../utils/currency';
 
 interface InvestmentButtonsProps {
@@ -27,6 +27,19 @@ export const InvestmentButtons: React.FC<InvestmentButtonsProps> = ({
   onInvest,
 }) => {
   const [submittingAmount, setSubmittingAmount] = useState<number | null>(null);
+  const [visibleContractEvent, setVisibleContractEvent] = useState<string | null>(lastContractEvent);
+
+  useEffect(() => {
+    if (!lastContractEvent) {
+      setVisibleContractEvent(null);
+      return;
+    }
+    setVisibleContractEvent(lastContractEvent);
+    const timer = window.setTimeout(() => {
+      setVisibleContractEvent(null);
+    }, 10000);
+    return () => window.clearTimeout(timer);
+  }, [lastContractEvent]);
 
   const handleSelect = async (amount: number) => {
     if (hasSubmitted || submittingAmount !== null) return;
@@ -60,16 +73,18 @@ export const InvestmentButtons: React.FC<InvestmentButtonsProps> = ({
         </p>
       </div>
 
-      {lastContractEvent && (
-        <div className="lobby-rules-summary" style={{ marginBottom: '1rem', padding: '0.85rem 1rem' }}>
-          <strong>Abkommen-Info:</strong> {lastContractEvent}
-        </div>
-      )}
-
-      {inContract && !hasSubmitted && (
-        <div className="lobby-rules-summary" style={{ marginBottom: '1rem', padding: '0.85rem 1rem' }}>
-          <strong>📜 Sie sind Mitglied im Abkommen:</strong> Ihr Mindestbeitrag beträgt{' '}
-          <strong>{formatFr(minContractAmount)}</strong> in dieser Runde.
+      {(visibleContractEvent || (inContract && !hasSubmitted)) && (
+        <div className="contract-mini-notices">
+          {visibleContractEvent && (
+            <div className="contract-mini-box">
+              <strong>Abkommen:</strong> {visibleContractEvent}
+            </div>
+          )}
+          {inContract && !hasSubmitted && (
+            <div className="contract-mini-box">
+              <strong>📜 Im Abkommen:</strong> Mindestbeitrag {formatFr(minContractAmount)}
+            </div>
+          )}
         </div>
       )}
 
@@ -91,7 +106,7 @@ export const InvestmentButtons: React.FC<InvestmentButtonsProps> = ({
             const isBlockedByContract = inContract && amount < minContractAmount && !allowedOptions.includes(amount);
             const isAllowed = allowedOptions.includes(amount) && currentBalanceRappen >= amount;
             const subtitle = isBlockedByContract
-              ? `Gesperrt durch Klimaabkommen (Min. ${formatFr(minContractAmount)})`
+              ? `Gesperrt (Min. ${formatFr(minContractAmount)})`
               : getOptionSubtitle(amount);
             const isLoading = submittingAmount === amount;
 

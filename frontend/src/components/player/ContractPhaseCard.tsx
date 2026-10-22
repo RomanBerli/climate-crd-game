@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { GameStateResponse } from '../../types/game';
 import {
   submitContractJoin,
@@ -19,6 +19,21 @@ export const ContractPhaseCard: React.FC<ContractPhaseCardProps> = ({
   const { roundPhase, contractState, player, currentRound, groupSize } = gameState;
   const [busy, setBusy] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [visibleContractEvent, setVisibleContractEvent] = useState<string | null>(
+    contractState.lastContractEvent
+  );
+
+  useEffect(() => {
+    if (!contractState.lastContractEvent) {
+      setVisibleContractEvent(null);
+      return;
+    }
+    setVisibleContractEvent(contractState.lastContractEvent);
+    const timer = window.setTimeout(() => {
+      setVisibleContractEvent(null);
+    }, 10000);
+    return () => window.clearTimeout(timer);
+  }, [contractState.lastContractEvent]);
 
   const runAction = async (fn: () => Promise<GameStateResponse>) => {
     if (busy) return;
@@ -186,9 +201,11 @@ export const ContractPhaseCard: React.FC<ContractPhaseCardProps> = ({
         </span>
       </div>
 
-      {contractState.lastContractEvent && (
-        <div className="lobby-rules-summary" style={{ marginBottom: '1rem' }}>
-          <strong>Status-Meldung:</strong> {contractState.lastContractEvent}
+      {visibleContractEvent && (
+        <div className="contract-mini-notices">
+          <div className="contract-mini-box">
+            <strong>Abkommen:</strong> {visibleContractEvent}
+          </div>
         </div>
       )}
 

@@ -1,6 +1,5 @@
 package ch.bbw.climategame.service;
 
-import ch.bbw.climategame.config.AppProperties;
 import ch.bbw.climategame.dto.request.SubmitSurveyRequest;
 import ch.bbw.climategame.dto.response.ContractStateDto;
 import ch.bbw.climategame.dto.response.EndgameResultDto;
@@ -20,12 +19,14 @@ import ch.bbw.climategame.repository.GameSessionRepository;
 import ch.bbw.climategame.repository.PlayerRepository;
 import ch.bbw.climategame.repository.PlayerSurveyRepository;
 import ch.bbw.climategame.repository.RoundInvestmentRepository;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -45,7 +46,11 @@ public class GameEngineService {
     private final RoundInvestmentRepository investmentRepository;
     private final PlayerSurveyRepository surveyRepository;
     private final PayoutService payoutService;
-    private final AppProperties appProperties;
+
+    private final double startAmountChf;
+    private final int groupSize;
+    private final int totalRounds;
+    private final BigDecimal riskLevel;
 
     public GameEngineService(
             GameSessionRepository sessionRepository,
@@ -53,14 +58,49 @@ public class GameEngineService {
             RoundInvestmentRepository investmentRepository,
             PlayerSurveyRepository surveyRepository,
             PayoutService payoutService,
-            AppProperties appProperties
+            @Value("${app.game.start-amount-chf}") double startAmountChf,
+            @Value("${app.game.group-size}") int groupSize,
+            @Value("${app.game.total-rounds}") int totalRounds,
+            @Value("${app.game.risk-level}") BigDecimal riskLevel
     ) {
         this.sessionRepository = sessionRepository;
         this.playerRepository = playerRepository;
         this.investmentRepository = investmentRepository;
         this.surveyRepository = surveyRepository;
         this.payoutService = payoutService;
-        this.appProperties = appProperties;
+        this.startAmountChf = startAmountChf;
+        this.groupSize = groupSize;
+        this.totalRounds = totalRounds;
+        this.riskLevel = riskLevel;
+    }
+
+    public int getGroupSize() {
+        return groupSize;
+    }
+
+    public int getTotalRounds() {
+        return totalRounds;
+    }
+
+    public BigDecimal getRiskLevel() {
+        return riskLevel;
+    }
+
+    public int getStartAmountRappen() {
+        return (int) Math.round(startAmountChf * 100.0);
+    }
+
+    public int getTargetSumRappen() {
+        return (getStartAmountRappen() / 2) * groupSize;
+    }
+
+    public List<Integer> getAllowedInvestmentOptions() {
+        int startRappen = getStartAmountRappen();
+        return List.of(
+                0,
+                (int) Math.round(startRappen * 0.05),
+                (int) Math.round(startRappen * 0.10)
+        );
     }
 
     @Scheduled(fixedRate = 5000)
@@ -121,7 +161,6 @@ public class GameEngineService {
         }
 
         List<Player> currentPlayers = playerRepository.findBySessionIdOrderByPlayerNumberAsc(session.getId());
-        int groupSize = appProperties.getGame().getGroupSize();
         if (currentPlayers.size() >= groupSize) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
@@ -138,7 +177,7 @@ public class GameEngineService {
             nextPlayerNumber++;
         }
 
-        int initialBalanceRappen = appProperties.getGame().getStartAmountRappen();
+        int initialBalanceRappen = getStartAmountRappen();
         Player newPlayer = new Player();
         newPlayer.setSession(session);
         newPlayer.setPlayerNumber(nextPlayerNumber);
@@ -208,7 +247,6 @@ public class GameEngineService {
         playerRepository.save(tokenPlayer);
 
         List<Player> allPlayers = playerRepository.findBySessionIdOrderByPlayerNumberAsc(session.getId());
-        int groupSize = appProperties.getGame().getGroupSize();
         long decidedCount = allPlayers.stream().filter(Player::isContractJoinDecided).count();
 
         if (decidedCount >= groupSize) {
@@ -451,7 +489,7 @@ public class GameEngineService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Sie haben in Runde " + currentRound + " bereits investiert.");
         }
 
-        List<Integer> allowedOptions = appProperties.getGame().getAllowedInvestmentOptions();
+        List<Integer> allowedOptions = getAllowedInvestmentOptions();
         if (!allowedOptions.contains(amountRappen)) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
@@ -537,7 +575,6 @@ public class GameEngineService {
 
     @Transactional
     public void advanceRoundOrFinish(GameSession session) {
-        int totalRounds = appProperties.getGame().getTotalRounds();
         List<Player> allPlayers = playerRepository.findBySessionIdOrderByPlayerNumberAsc(session.getId());
 
         if (session.getCurrentRound() < totalRounds) {
@@ -657,8 +694,6 @@ public class GameEngineService {
             List<Player> allPlayers,
             List<RoundInvestment> allInvestments
     ) {
-        int groupSize = appProperties.getGame().getGroupSize();
-        int totalRounds = appProperties.getGame().getTotalRounds();
         int currentRound = session.getCurrentRound();
         RoundPhase roundPhase = session.getRoundPhase() != null ? session.getRoundPhase() : RoundPhase.INVESTMENT;
 
@@ -680,7 +715,7 @@ public class GameEngineService {
         Integer myCurrentAmount = myCurrentRoundInvestment != null ? myCurrentRoundInvestment.getAmountRappen() : null;
 
         int minRequiredRappen = getMinimumRequiredInvestmentRappen(session, player);
-        List<Integer> allowedOptions = appProperties.getGame().getAllowedInvestmentOptions().stream()
+        List<Integer> allowedOptions = getAllowedInvestmentOptions().stream()
                 .filter(opt -> opt >= minRequiredRappen && opt <= player.getCurrentBalanceRappen())
                 .toList();
 

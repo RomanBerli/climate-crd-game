@@ -13,7 +13,6 @@ export const RoundHeader: React.FC<RoundHeaderProps> = ({ gameState }) => {
     contractState,
     currentRound,
     totalRounds,
-    riskPercent,
     targetSumRappen,
     player,
   } = gameState;
@@ -23,11 +22,8 @@ export const RoundHeader: React.FC<RoundHeaderProps> = ({ gameState }) => {
       <div className="round-header__identity">
         <span className="badge badge--accent">Spieler {player.playerNumber}</span>
         <span className="badge badge--neutral">Raum {sessionCode}</span>
-        <span className="badge badge--risk" title="Wahrscheinlichkeit des Totalverlusts bei Verfehlen des Klimaziels">
-          Risiko: {riskPercent}%
-        </span>
         {gameMode === 'WITH_CONTRACTS' && (
-          <span className={`badge ${player.inContract ? 'badge--accent' : 'badge--neutral'}`}>
+          <span className="badge badge--risk">
             {player.inContract
               ? `📜 Im Abkommen (${contractState.memberCount} Mitgl.)`
               : contractState.contractAbolished

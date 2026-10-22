@@ -64,17 +64,17 @@ export const GamePage: React.FC<GamePageProps> = ({
             />
           )}
 
-          <PlayerStatusList
-            playersStatus={gameState.playersStatus}
-            myPlayerNumber={gameState.player.playerNumber}
-            gameMode={gameState.gameMode}
-          />
-
           <HistoryTable
             history={gameState.history}
             myPlayerNumber={gameState.player.playerNumber}
             groupSize={gameState.groupSize}
             initialBalanceRappen={gameState.player.initialBalanceRappen}
+          />
+
+          <PlayerStatusList
+            playersStatus={gameState.playersStatus}
+            myPlayerNumber={gameState.player.playerNumber}
+            gameMode={gameState.gameMode}
           />
         </div>
 
