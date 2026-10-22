@@ -3,6 +3,7 @@ import { GameStateResponse } from '../types/game';
 import { submitInvestment } from '../api/gameApi';
 import { useLocalNotepad } from '../hooks/useLocalNotepad';
 import { RoundHeader } from '../components/player/RoundHeader';
+import { ContractPhaseCard } from '../components/player/ContractPhaseCard';
 import { InvestmentButtons } from '../components/player/InvestmentButtons';
 import { PlayerStatusList } from '../components/player/PlayerStatusList';
 import { HistoryTable } from '../components/player/HistoryTable';
@@ -43,25 +44,37 @@ export const GamePage: React.FC<GamePageProps> = ({
         <div className="game-main-grid__left">
           {investError && <div className="alert alert--error">{investError}</div>}
 
-          <InvestmentButtons
-            currentBalanceRappen={gameState.player.currentBalanceRappen}
-            allowedOptions={gameState.player.allowedInvestmentOptions}
-            hasSubmitted={gameState.player.hasSubmittedCurrentRound}
-            submittedAmount={gameState.player.currentRoundInvestmentRappen}
-            allPlayersReady={allPlayersReady}
-            onInvest={handleInvest}
-          />
+          {gameState.roundPhase !== 'INVESTMENT' ? (
+            <ContractPhaseCard
+              gameState={gameState}
+              onStateUpdated={onStateUpdated}
+            />
+          ) : (
+            <InvestmentButtons
+              initialBalanceRappen={gameState.player.initialBalanceRappen}
+              currentBalanceRappen={gameState.player.currentBalanceRappen}
+              allowedOptions={gameState.player.allowedInvestmentOptions}
+              hasSubmitted={gameState.player.hasSubmittedCurrentRound}
+              submittedAmount={gameState.player.currentRoundInvestmentRappen}
+              allPlayersReady={allPlayersReady}
+              inContract={gameState.player.inContract}
+              minInvestmentRappen={gameState.contractState?.minInvestmentRappen ?? 0}
+              lastContractEvent={gameState.contractState?.lastContractEvent ?? null}
+              onInvest={handleInvest}
+            />
+          )}
 
           <PlayerStatusList
             playersStatus={gameState.playersStatus}
             myPlayerNumber={gameState.player.playerNumber}
+            gameMode={gameState.gameMode}
           />
 
           <HistoryTable
             history={gameState.history}
             myPlayerNumber={gameState.player.playerNumber}
             groupSize={gameState.groupSize}
-            targetSumRappen={gameState.targetSumRappen}
+            initialBalanceRappen={gameState.player.initialBalanceRappen}
           />
         </div>
 

@@ -7,6 +7,7 @@ import ch.bbw.climategame.entity.GameSession;
 import ch.bbw.climategame.entity.Player;
 import ch.bbw.climategame.entity.PlayerSurvey;
 import ch.bbw.climategame.entity.RoundInvestment;
+import ch.bbw.climategame.entity.RoundPhase;
 import ch.bbw.climategame.entity.SessionStatus;
 import ch.bbw.climategame.repository.GameSessionRepository;
 import ch.bbw.climategame.repository.PlayerRepository;
@@ -61,12 +62,6 @@ public class AdminService {
     @Transactional
     public AdminSessionResponse createSession(GameMode requestedMode) {
         GameMode mode = requestedMode != null ? requestedMode : GameMode.NORMAL;
-        if (mode == GameMode.WITH_CONTRACTS) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Der Spielmodus 'Mit Verträgen' ist aktuell noch nicht freigeschaltet."
-            );
-        }
 
         BigDecimal configuredRisk = appProperties.getGame().getRiskLevel();
         if (configuredRisk == null || configuredRisk.compareTo(BigDecimal.ZERO) < 0 || configuredRisk.compareTo(BigDecimal.ONE) > 0) {
@@ -77,6 +72,9 @@ public class AdminService {
         session.setCode(generateUniqueRoomCode());
         session.setStatus(SessionStatus.LOBBY);
         session.setGameMode(mode);
+        session.setRoundPhase(RoundPhase.INVESTMENT);
+        session.setContractActive(false);
+        session.setContractAbolished(false);
         session.setRiskLevel(configuredRisk.setScale(2, RoundingMode.HALF_UP));
         session.setCurrentRound(0);
         session.setTargetSumRappen(appProperties.getGame().getTargetSumRappen());
@@ -86,15 +84,17 @@ public class AdminService {
         return buildAdminSessionResponse(saved);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public List<AdminSessionResponse> getAllSessions() {
+        gameEngineService.kickInactivePlayers();
         return sessionRepository.findAllByOrderByCreatedAtDesc().stream()
                 .map(this::buildAdminSessionResponse)
                 .toList();
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public AdminSessionResponse getSession(UUID sessionId) {
+        gameEngineService.kickInactivePlayers();
         GameSession session = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session nicht gefunden."));
         return buildAdminSessionResponse(session);
@@ -102,6 +102,7 @@ public class AdminService {
 
     @Transactional
     public AdminSessionResponse startSession(UUID sessionId) {
+        gameEngineService.kickInactivePlayers();
         GameSession session = sessionRepository.findByIdForUpdate(sessionId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session nicht gefunden."));
 
@@ -120,6 +121,7 @@ public class AdminService {
 
         session.setStatus(SessionStatus.RUNNING);
         session.setCurrentRound(1);
+        session.setRoundPhase(session.getGameMode() == GameMode.WITH_CONTRACTS ? RoundPhase.CONTRACT_JOIN : RoundPhase.INVESTMENT);
         session.setRoundStartTime(Instant.now());
 
         GameSession saved = sessionRepository.save(session);
@@ -131,10 +133,10 @@ public class AdminService {
         GameSession session = sessionRepository.findByIdForUpdate(sessionId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session nicht gefunden."));
 
-        if (session.getStatus() != SessionStatus.RUNNING) {
+        if (session.getStatus() != SessionStatus.RUNNING || session.getRoundPhase() != RoundPhase.INVESTMENT) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "Die Runde kann nur im laufenden Spielstatus (RUNNING) weitergeschaltet werden."
+                    "Die Runde kann erst weitergeschaltet werden, wenn die Einzahlungsphase abgeschlossen ist."
             );
         }
 
@@ -174,7 +176,7 @@ public class AdminService {
         StringBuilder sb = new StringBuilder();
         // UTF-8 BOM für korrekte Umlaute in Microsoft Excel
         sb.append('\uFEFF');
-        sb.append("session_id,session_code,game_mode,risk_treatment,target_sum_rappen,total_invested_rappen,target_reached,risk_occurred,round,player_number,invested_rappen,invested_chf,is_auto_bet,submitted_at,final_payout_rappen,final_payout_chf,survey_expected_probability_pct,survey_reaction_unfairness,survey_motivation_ranking,survey_contract_joined_reason,survey_contract_not_joined_reason,survey_contract_left_reason,survey_contract_stayed_reason,survey_age,survey_gender,survey_twint_phone\n");
+        sb.append("session_id,session_code,game_mode,risk_treatment,target_sum_rappen,total_invested_rappen,target_reached,risk_occurred,round,player_number,invested_rappen,invested_chf,is_auto_bet,submitted_at,final_payout_rappen,final_payout_chf,ever_joined_contract,left_contract,in_contract_at_end,survey_expected_probability_pct,survey_reaction_unfairness,survey_motivation_ranking,survey_contract_joined_reason,survey_contract_not_joined_reason,survey_contract_left_reason,survey_contract_stayed_reason,survey_age,survey_gender,survey_twint_phone\n");
 
         for (RoundInvestment inv : investments) {
             Player p = playerByNumber.get(inv.getPlayerNumber());
@@ -202,6 +204,9 @@ public class AdminService {
                     .append(csvEscape(inv.getCreatedAt() != null ? inv.getCreatedAt().toString() : "")).append(',')
                     .append(finalPayoutRappen).append(',')
                     .append(finalPayoutChf).append(',')
+                    .append(p != null && p.isEverJoinedContract()).append(',')
+                    .append(p != null && p.isLeftContract()).append(',')
+                    .append(p != null && p.isInContract()).append(',')
                     .append(survey != null ? survey.getExpectedProbabilityPct() : "").append(',')
                     .append(csvEscape(survey != null ? survey.getReactionToUnfairness() : "")).append(',')
                     .append(csvEscape(survey != null ? survey.getMotivationRanking() : "")).append(',')
@@ -229,6 +234,7 @@ public class AdminService {
     private AdminSessionResponse buildAdminSessionResponse(GameSession session) {
         List<Player> players = playerRepository.findBySessionIdOrderByPlayerNumberAsc(session.getId());
         int currentRound = session.getCurrentRound();
+        RoundPhase roundPhase = session.getRoundPhase() != null ? session.getRoundPhase() : RoundPhase.INVESTMENT;
 
         List<RoundInvestment> currentRoundInvestmentsList = currentRound > 0
                 ? investmentRepository.findBySessionIdAndRoundNumberOrderByPlayerNumberAsc(session.getId(), currentRound)
@@ -260,6 +266,12 @@ public class AdminService {
                     isReady = true;
                 } else if (session.getStatus() == SessionStatus.FINISHED) {
                     isReady = surveyedPlayerNumbers.contains(pNum);
+                } else if (roundPhase == RoundPhase.CONTRACT_JOIN) {
+                    isReady = p.isContractJoinDecided();
+                } else if (roundPhase == RoundPhase.CONTRACT_REVIEW) {
+                    isReady = !p.isInContract() || Integer.valueOf(currentRound).equals(p.getContractReviewDecidedRound());
+                } else if (roundPhase == RoundPhase.CONTRACT_VOTE) {
+                    isReady = !p.isInContract() || Integer.valueOf(currentRound).equals(p.getContractVoteRound());
                 } else {
                     isReady = currentInv != null;
                 }
@@ -270,6 +282,8 @@ public class AdminService {
                         pNum,
                         true,
                         isReady,
+                        p.isInContract(),
+                        p.isLeftContract(),
                         p.getFinalPayoutRappen(),
                         p.getLastSeenAt()
                 ));
@@ -278,13 +292,18 @@ public class AdminService {
                         pNum,
                         false,
                         false,
+                        false,
+                        false,
                         null,
                         null
                 ));
             }
         }
 
-        boolean canAdvanceRound = session.getStatus() == SessionStatus.RUNNING && readyPlayersCount >= groupSize;
+        int contractMemberCount = (int) players.stream().filter(Player::isInContract).count();
+        boolean canAdvanceRound = session.getStatus() == SessionStatus.RUNNING
+                && roundPhase == RoundPhase.INVESTMENT
+                && readyPlayersCount >= groupSize;
         int riskPercent = (int) Math.round(session.getRiskLevel().doubleValue() * 100.0);
 
         return new AdminSessionResponse(
@@ -292,6 +311,9 @@ public class AdminService {
                 session.getCode(),
                 session.getStatus(),
                 session.getGameMode(),
+                roundPhase,
+                session.isContractActive(),
+                contractMemberCount,
                 session.getRiskLevel(),
                 riskPercent,
                 session.getCurrentRound(),

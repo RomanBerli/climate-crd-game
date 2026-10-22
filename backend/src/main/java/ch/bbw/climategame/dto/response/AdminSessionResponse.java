@@ -1,6 +1,7 @@
 package ch.bbw.climategame.dto.response;
 
 import ch.bbw.climategame.entity.GameMode;
+import ch.bbw.climategame.entity.RoundPhase;
 import ch.bbw.climategame.entity.SessionStatus;
 
 import java.math.BigDecimal;
@@ -13,6 +14,9 @@ public record AdminSessionResponse(
         String code,
         SessionStatus status,
         GameMode gameMode,
+        RoundPhase roundPhase,
+        boolean contractActive,
+        int contractMemberCount,
         BigDecimal riskLevel,
         int riskPercent,
         int currentRound,
@@ -33,6 +37,8 @@ public record AdminSessionResponse(
             int playerNumber,
             boolean isConnected,
             boolean isReadyCurrentRound,
+            boolean inContract,
+            boolean leftContract,
             Integer finalPayoutRappen,
             Instant lastSeenAt
     ) {

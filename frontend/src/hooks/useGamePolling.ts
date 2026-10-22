@@ -16,8 +16,11 @@ export function useGamePolling(enabled: boolean = true): UseGamePollingResult {
   const [loading, setLoading] = useState<boolean>(() => Boolean(getStoredPlayerToken()));
   const [error, setError] = useState<string | null>(null);
   const isFetchingRef = useRef<boolean>(false);
+  const sessionEpochRef = useRef<number>(0);
 
   const setGameStateDirectly = useCallback((state: GameStateResponse | null) => {
+    sessionEpochRef.current += 1;
+    isFetchingRef.current = false;
     setGameState(state);
     if (state) {
       setError(null);
@@ -25,18 +28,34 @@ export function useGamePolling(enabled: boolean = true): UseGamePollingResult {
   }, []);
 
   const refreshNow = useCallback(async () => {
-    if (!getStoredPlayerToken()) {
+    const tokenAtStart = getStoredPlayerToken();
+    if (!tokenAtStart) {
+      sessionEpochRef.current += 1;
+      isFetchingRef.current = false;
       setGameState(null);
       setLoading(false);
       return;
     }
     if (isFetchingRef.current) return;
     isFetchingRef.current = true;
+    const epochAtStart = sessionEpochRef.current;
     try {
       const state = await fetchGameState();
+      if (
+        sessionEpochRef.current !== epochAtStart ||
+        getStoredPlayerToken() !== tokenAtStart
+      ) {
+        return;
+      }
       setGameState(state);
       setError(null);
     } catch (err) {
+      if (
+        sessionEpochRef.current !== epochAtStart ||
+        getStoredPlayerToken() !== tokenAtStart
+      ) {
+        return;
+      }
       if (err instanceof ApiError && err.status === 401) {
         setStoredPlayerToken(null);
         setGameState(null);
@@ -44,8 +63,10 @@ export function useGamePolling(enabled: boolean = true): UseGamePollingResult {
         setError(err.message);
       }
     } finally {
+      if (sessionEpochRef.current === epochAtStart) {
+        isFetchingRef.current = false;
+      }
       setLoading(false);
-      isFetchingRef.current = false;
     }
   }, []);
 

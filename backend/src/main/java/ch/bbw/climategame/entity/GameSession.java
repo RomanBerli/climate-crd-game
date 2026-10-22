@@ -39,6 +39,25 @@ public class GameSession {
     @Column(name = "game_mode", length = 30, nullable = false)
     private GameMode gameMode = GameMode.NORMAL;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "round_phase", length = 30, nullable = false)
+    private RoundPhase roundPhase = RoundPhase.INVESTMENT;
+
+    @Column(name = "contract_active", nullable = false)
+    private boolean contractActive = false;
+
+    @Column(name = "contract_abolished", nullable = false)
+    private boolean contractAbolished = false;
+
+    @Column(name = "vote_initiated_round")
+    private Integer voteInitiatedRound;
+
+    @Column(name = "vote_initiator_player_number")
+    private Integer voteInitiatorPlayerNumber;
+
+    @Column(name = "last_contract_event", length = 255)
+    private String lastContractEvent;
+
     @Column(name = "risk_level", precision = 4, scale = 2, nullable = false)
     private BigDecimal riskLevel;
 
@@ -116,6 +135,54 @@ public class GameSession {
 
     public void setGameMode(GameMode gameMode) {
         this.gameMode = gameMode;
+    }
+
+    public RoundPhase getRoundPhase() {
+        return roundPhase;
+    }
+
+    public void setRoundPhase(RoundPhase roundPhase) {
+        this.roundPhase = roundPhase;
+    }
+
+    public boolean isContractActive() {
+        return contractActive;
+    }
+
+    public void setContractActive(boolean contractActive) {
+        this.contractActive = contractActive;
+    }
+
+    public boolean isContractAbolished() {
+        return contractAbolished;
+    }
+
+    public void setContractAbolished(boolean contractAbolished) {
+        this.contractAbolished = contractAbolished;
+    }
+
+    public Integer getVoteInitiatedRound() {
+        return voteInitiatedRound;
+    }
+
+    public void setVoteInitiatedRound(Integer voteInitiatedRound) {
+        this.voteInitiatedRound = voteInitiatedRound;
+    }
+
+    public Integer getVoteInitiatorPlayerNumber() {
+        return voteInitiatorPlayerNumber;
+    }
+
+    public void setVoteInitiatorPlayerNumber(Integer voteInitiatorPlayerNumber) {
+        this.voteInitiatorPlayerNumber = voteInitiatorPlayerNumber;
+    }
+
+    public String getLastContractEvent() {
+        return lastContractEvent;
+    }
+
+    public void setLastContractEvent(String lastContractEvent) {
+        this.lastContractEvent = lastContractEvent;
     }
 
     public BigDecimal getRiskLevel() {

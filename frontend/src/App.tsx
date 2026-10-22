@@ -70,13 +70,21 @@ export const App: React.FC = () => {
         />
       );
     }
-    return <EndgamePage gameState={gameState} onResetSession={refreshNow} />;
+    return (
+      <EndgamePage
+        gameState={gameState}
+        onResetSession={async () => {
+          setGameStateDirectly(null);
+        }}
+      />
+    );
   }
 
   return (
     <LobbyPage
       gameState={gameState}
       onJoined={refreshNow}
+      onLeft={() => setGameStateDirectly(null)}
       onNavigateAdmin={navigateToAdmin}
     />
   );

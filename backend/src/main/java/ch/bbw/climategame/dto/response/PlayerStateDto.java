@@ -9,6 +9,9 @@ public record PlayerStateDto(
         int ownTotalInvestedRappen,
         boolean hasSubmittedCurrentRound,
         boolean hasSubmittedSurvey,
+        boolean inContract,
+        boolean everJoinedContract,
+        boolean leftContract,
         Integer currentRoundInvestmentRappen,
         List<Integer> allowedInvestmentOptions,
         Integer finalPayoutRappen

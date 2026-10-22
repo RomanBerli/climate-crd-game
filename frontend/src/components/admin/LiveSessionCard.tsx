@@ -10,6 +10,13 @@ interface LiveSessionCardProps {
   onAdvanceRound: (sessionId: string) => Promise<void>;
 }
 
+const PHASE_LABELS: Record<string, string> = {
+  CONTRACT_JOIN: 'Abkommen-Beitritt (vor Runde 1)',
+  CONTRACT_REVIEW: 'Zwischenrunde (Abkommen)',
+  CONTRACT_VOTE: 'Abstimmung (Abkommen)',
+  INVESTMENT: 'Einzahlungsrunde',
+};
+
 export const LiveSessionCard: React.FC<LiveSessionCardProps> = ({
   session,
   adminKey,
@@ -49,6 +56,11 @@ export const LiveSessionCard: React.FC<LiveSessionCardProps> = ({
               <span className="badge badge--accent">
                 Modus: {session.gameMode === 'WITH_CONTRACTS' ? 'Mit Verträgen' : 'Normal'}
               </span>
+              {session.gameMode === 'WITH_CONTRACTS' && session.status === 'RUNNING' && (
+                <span className="badge badge--neutral">
+                  {PHASE_LABELS[session.roundPhase] || session.roundPhase} ({session.contractMemberCount} im Abkommen)
+                </span>
+              )}
               <span className="badge badge--risk">
                 Risiko: {session.riskPercent}%
               </span>
@@ -110,10 +122,14 @@ export const LiveSessionCard: React.FC<LiveSessionCardProps> = ({
                   ? isLastRound
                     ? 'Runde 10 abschliessen und Experiment beenden'
                     : `Runde ${session.currentRound + 1} starten`
+                  : session.roundPhase !== 'INVESTMENT'
+                  ? `Spieler befinden sich noch in der Abkommen-Phase (${PHASE_LABELS[session.roundPhase]})`
                   : `Warten bis alle ${session.groupSize} Spieler gewählt haben (${session.readyPlayersCount}/${session.groupSize})`
               }
             >
-              {isLastRound
+              {session.roundPhase !== 'INVESTMENT'
+                ? `⏳ ${PHASE_LABELS[session.roundPhase]} (${session.readyPlayersCount}/${session.groupSize})`
+                : isLastRound
                 ? `🏁 Experiment abschliessen (${session.readyPlayersCount}/${session.groupSize} bereit)`
                 : `⏭ Nächste Runde (${session.readyPlayersCount}/${session.groupSize} bereit)`}
             </button>
@@ -177,6 +193,17 @@ export const LiveSessionCard: React.FC<LiveSessionCardProps> = ({
                   : '⏳ Überlegt...'}
               </span>
             </div>
+            {p.isConnected && session.gameMode === 'WITH_CONTRACTS' && session.status !== 'LOBBY' && (
+              <div className="admin-player-box__details">
+                <span>
+                  {p.inContract
+                    ? '📜 Im Abkommen'
+                    : p.leftContract
+                    ? 'Ausgetreten'
+                    : 'Kein Abkommen'}
+                </span>
+              </div>
+            )}
             {p.isConnected && session.status === 'FINISHED' && (
               <div className="admin-player-box__details">
                 <span className="admin-player-box__payout">

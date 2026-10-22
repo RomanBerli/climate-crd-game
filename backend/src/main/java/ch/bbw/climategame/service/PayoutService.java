@@ -36,11 +36,7 @@ public class PayoutService {
         session.setRiskOccurred(riskOccurred);
 
         for (Player player : players) {
-            int ownInvestments = allInvestments.stream()
-                    .filter(inv -> inv.getPlayerNumber() == player.getPlayerNumber())
-                    .mapToInt(RoundInvestment::getAmountRappen)
-                    .sum();
-            int remainingBalance = Math.max(0, player.getInitialBalanceRappen() - ownInvestments);
+            int remainingBalance = Math.max(0, player.getCurrentBalanceRappen());
             player.setCurrentBalanceRappen(remainingBalance);
 
             if (goalReached || !riskOccurred) {

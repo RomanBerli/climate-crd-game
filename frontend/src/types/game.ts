@@ -1,5 +1,6 @@
 export type SessionStatus = 'LOBBY' | 'RUNNING' | 'FINISHED';
 export type GameMode = 'NORMAL' | 'WITH_CONTRACTS';
+export type RoundPhase = 'CONTRACT_JOIN' | 'CONTRACT_REVIEW' | 'CONTRACT_VOTE' | 'INVESTMENT';
 
 export interface JoinLobbyResponse {
   sessionId: string;
@@ -21,6 +22,21 @@ export interface SubmitSurveyPayload {
   twintPhone: string;
 }
 
+export interface ContractStateDto {
+  roundPhase: RoundPhase;
+  contractActive: boolean;
+  contractAbolished: boolean;
+  memberCount: number;
+  minInvestmentRappen: number;
+  exitFeePerMemberRappen: number;
+  totalExitFeeForPlayerRappen: number;
+  canAffordExit: boolean;
+  voteAlreadyHeldThisRound: boolean;
+  voteInitiatorPlayerNumber: number | null;
+  hasDecidedCurrentContractPhase: boolean;
+  lastContractEvent: string | null;
+}
+
 export interface PlayerStateDto {
   playerNumber: number;
   initialBalanceRappen: number;
@@ -28,6 +44,9 @@ export interface PlayerStateDto {
   ownTotalInvestedRappen: number;
   hasSubmittedCurrentRound: boolean;
   hasSubmittedSurvey: boolean;
+  inContract: boolean;
+  everJoinedContract: boolean;
+  leftContract: boolean;
   currentRoundInvestmentRappen: number | null;
   allowedInvestmentOptions: number[];
   finalPayoutRappen: number | null;
@@ -37,6 +56,8 @@ export interface PlayerSlotStatusDto {
   playerNumber: number;
   isConnected: boolean;
   isReady: boolean;
+  inContract: boolean;
+  leftContract: boolean;
 }
 
 export interface PlayerInvestmentDto {
@@ -48,7 +69,6 @@ export interface PlayerInvestmentDto {
 export interface RoundHistoryDto {
   round: number;
   roundTotalRappen: number;
-  cumulativePotRappen: number;
   investments: PlayerInvestmentDto[];
 }
 
@@ -68,6 +88,8 @@ export interface GameStateResponse {
   sessionCode: string;
   status: SessionStatus;
   gameMode: GameMode;
+  roundPhase: RoundPhase;
+  contractState: ContractStateDto;
   riskLevel: number;
   riskPercent: number;
   targetSumRappen: number;
@@ -86,6 +108,8 @@ export interface AdminPlayerDto {
   playerNumber: number;
   isConnected: boolean;
   isReadyCurrentRound: boolean;
+  inContract: boolean;
+  leftContract: boolean;
   finalPayoutRappen: number | null;
   lastSeenAt: string | null;
 }
@@ -95,6 +119,9 @@ export interface AdminSessionResponse {
   code: string;
   status: SessionStatus;
   gameMode: GameMode;
+  roundPhase: RoundPhase;
+  contractActive: boolean;
+  contractMemberCount: number;
   riskLevel: number;
   riskPercent: number;
   currentRound: number;

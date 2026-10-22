@@ -14,18 +14,17 @@ const GAME_MODES: Array<{
 }> = [
   {
     value: 'NORMAL',
-    label: 'Modus: Normal',
+    label: 'Variante 1: Normal',
     description:
-      'Klassisches Milinski Collective-Risk Experiment (Startkapital, Runden und Risiko-Prozentsatz über Umgebungsvariablen konfiguriert).',
+      'Klassisches Milinski Collective-Risk Experiment (ohne Verträge).',
     disabled: false,
   },
   {
     value: 'WITH_CONTRACTS',
-    label: 'Modus: Mit Verträgen',
+    label: 'Variante 2: Mit Verträgen (Klimaabkommen)',
     description:
-      'Erweiterter Spielmodus mit Verträgen zwischen den Spielern (wird später ergänzt).',
-    disabled: true,
-    badge: 'Wird später ergänzt',
+      'Freiwilliger Beitritt zum Klimaabkommen vor Runde 1 (fester Mindestbeitrag pro Runde, Austritt gegen Gebühr an jedes verbleibende Mitglied oder kostenlose Auflösung per Mehrheitsabstimmung).',
+    disabled: false,
   },
 ];
 

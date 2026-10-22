@@ -53,7 +53,15 @@ public class LobbyController {
     }
 
     @PostMapping("/leave")
-    public ResponseEntity<Void> leaveLobby(HttpServletResponse httpResponse) {
+    public ResponseEntity<Void> leaveLobby(
+            HttpServletRequest httpRequest,
+            HttpServletResponse httpResponse,
+            @RequestHeader(value = "X-Player-Token", required = false) String headerToken,
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authHeader
+    ) {
+        String existingToken = resolveToken(httpRequest, headerToken, authHeader);
+        gameEngineService.leaveLobby(existingToken);
+
         ResponseCookie clearCookie = ResponseCookie.from(PLAYER_TOKEN_COOKIE, "")
                 .httpOnly(true)
                 .secure(false)

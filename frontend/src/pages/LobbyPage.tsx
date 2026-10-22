@@ -6,12 +6,14 @@ import { formatFr } from '../utils/currency';
 interface LobbyPageProps {
   gameState: GameStateResponse | null;
   onJoined: () => Promise<void>;
+  onLeft: () => void;
   onNavigateAdmin: () => void;
 }
 
 export const LobbyPage: React.FC<LobbyPageProps> = ({
   gameState,
   onJoined,
+  onLeft,
   onNavigateAdmin,
 }) => {
   const [roomCode, setRoomCode] = useState('');
@@ -38,8 +40,8 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
   };
 
   const handleLeaveLobby = async () => {
+    onLeft();
     await leaveLobby();
-    await onJoined();
   };
 
   // Falls der Spieler bereits im Warteraum (LOBBY) eines Raums eingeloggt ist
@@ -65,7 +67,9 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
                 <strong>Ihr Startkapital:</strong> {formatFr(gameState.player.initialBalanceRappen)}
               </li>
               <li>
-                <strong>Dauer:</strong> {gameState.totalRounds} Runden (pro Runde wählbar: 0 Fr., 0.2 Fr. oder 0.4 Fr.)
+                <strong>Dauer:</strong> {gameState.totalRounds} Runden (pro Runde wählbar: 0 Fr.,{' '}
+                {formatFr(Math.round(gameState.player.initialBalanceRappen * 0.05))} oder{' '}
+                {formatFr(Math.round(gameState.player.initialBalanceRappen * 0.1))} )
               </li>
               <li>
                 <strong>Gemeinsames Klimaziel der {gameState.groupSize}er-Gruppe:</strong>{' '}
@@ -111,7 +115,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
           <div className="lobby-waiting-card__footer">
             <span className="pulse-indicator">Warte auf Spielstart durch Versuchsleiter...</span>
             <button type="button" className="btn btn--ghost" onClick={handleLeaveLobby}>
-              Anderen Raumcode eingeben
+              Raum verlassen
             </button>
           </div>
         </div>

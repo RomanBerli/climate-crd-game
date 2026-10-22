@@ -48,6 +48,27 @@ public class Player {
     @Column(name = "final_payout_rappen")
     private Integer finalPayoutRappen;
 
+    @Column(name = "in_contract", nullable = false)
+    private boolean inContract = false;
+
+    @Column(name = "ever_joined_contract", nullable = false)
+    private boolean everJoinedContract = false;
+
+    @Column(name = "left_contract", nullable = false)
+    private boolean leftContract = false;
+
+    @Column(name = "contract_join_decided", nullable = false)
+    private boolean contractJoinDecided = false;
+
+    @Column(name = "contract_review_decided_round")
+    private Integer contractReviewDecidedRound;
+
+    @Column(name = "contract_vote_round")
+    private Integer contractVoteRound;
+
+    @Column(name = "contract_vote_abolish")
+    private Boolean contractVoteAbolish;
+
     @Column(name = "last_seen_at", nullable = false)
     private Instant lastSeenAt;
 
@@ -112,6 +133,62 @@ public class Player {
 
     public void setFinalPayoutRappen(Integer finalPayoutRappen) {
         this.finalPayoutRappen = finalPayoutRappen;
+    }
+
+    public boolean isInContract() {
+        return inContract;
+    }
+
+    public void setInContract(boolean inContract) {
+        this.inContract = inContract;
+    }
+
+    public boolean isEverJoinedContract() {
+        return everJoinedContract;
+    }
+
+    public void setEverJoinedContract(boolean everJoinedContract) {
+        this.everJoinedContract = everJoinedContract;
+    }
+
+    public boolean isLeftContract() {
+        return leftContract;
+    }
+
+    public void setLeftContract(boolean leftContract) {
+        this.leftContract = leftContract;
+    }
+
+    public boolean isContractJoinDecided() {
+        return contractJoinDecided;
+    }
+
+    public void setContractJoinDecided(boolean contractJoinDecided) {
+        this.contractJoinDecided = contractJoinDecided;
+    }
+
+    public Integer getContractReviewDecidedRound() {
+        return contractReviewDecidedRound;
+    }
+
+    public void setContractReviewDecidedRound(Integer contractReviewDecidedRound) {
+        this.contractReviewDecidedRound = contractReviewDecidedRound;
+    }
+
+    public Integer getContractVoteRound() {
+        return contractVoteRound;
+    }
+
+    public void setContractVoteRound(Integer contractVoteRound) {
+        this.contractVoteRound = contractVoteRound;
+    }
+
+    public Boolean getContractVoteAbolish() {
+        return contractVoteAbolish;
+    }
+
+    public void setContractVoteAbolish(Boolean contractVoteAbolish) {
+        this.contractVoteAbolish = contractVoteAbolish;
     }
 
     public Instant getLastSeenAt() {

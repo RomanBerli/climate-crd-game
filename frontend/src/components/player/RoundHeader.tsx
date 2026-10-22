@@ -9,11 +9,12 @@ interface RoundHeaderProps {
 export const RoundHeader: React.FC<RoundHeaderProps> = ({ gameState }) => {
   const {
     sessionCode,
+    gameMode,
+    contractState,
     currentRound,
     totalRounds,
     riskPercent,
     targetSumRappen,
-    totalPotRappen,
     player,
   } = gameState;
 
@@ -25,6 +26,17 @@ export const RoundHeader: React.FC<RoundHeaderProps> = ({ gameState }) => {
         <span className="badge badge--risk" title="Wahrscheinlichkeit des Totalverlusts bei Verfehlen des Klimaziels">
           Risiko: {riskPercent}%
         </span>
+        {gameMode === 'WITH_CONTRACTS' && (
+          <span className={`badge ${player.inContract ? 'badge--accent' : 'badge--neutral'}`}>
+            {player.inContract
+              ? `📜 Im Abkommen (${contractState.memberCount} Mitgl.)`
+              : contractState.contractAbolished
+              ? 'Abkommen aufgelöst'
+              : player.leftContract
+              ? 'Aus Abkommen ausgetreten'
+              : 'Ohne Abkommen'}
+          </span>
+        )}
       </div>
 
       <div className="round-header__round">
@@ -36,10 +48,8 @@ export const RoundHeader: React.FC<RoundHeaderProps> = ({ gameState }) => {
 
       <div className="round-header__metrics">
         <div className="metric-box">
-          <span className="metric-box__label">Klimafonds Total (nach Runde {Math.max(0, currentRound - 1)})</span>
-          <strong className="metric-box__value">
-            {formatFr(totalPotRappen)} / {formatFr(targetSumRappen)}
-          </strong>
+          <span className="metric-box__label">Gruppen-Klimaziel (10 Runden)</span>
+          <strong className="metric-box__value">{formatFr(targetSumRappen)}</strong>
         </div>
         <div className="metric-box metric-box--highlight">
           <span className="metric-box__label">Ihr aktuelles Restguthaben</span>

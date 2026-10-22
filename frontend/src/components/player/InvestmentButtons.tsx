@@ -2,26 +2,28 @@ import React, { useState } from 'react';
 import { formatFr } from '../../utils/currency';
 
 interface InvestmentButtonsProps {
+  initialBalanceRappen: number;
   currentBalanceRappen: number;
   allowedOptions: number[];
   hasSubmitted: boolean;
   submittedAmount: number | null;
   allPlayersReady: boolean;
+  inContract?: boolean;
+  minInvestmentRappen?: number;
+  lastContractEvent?: string | null;
   onInvest: (amountRappen: number) => Promise<void>;
 }
 
-const OPTION_SUBTITLES: Record<number, string> = {
-  0: 'Kein Beitrag in dieser Runde',
-  20: 'Mittlerer Beitrag (Fairer Anteil)',
-  40: 'Maximaler Rundenbeitrag',
-};
-
 export const InvestmentButtons: React.FC<InvestmentButtonsProps> = ({
+  initialBalanceRappen,
   currentBalanceRappen,
   allowedOptions,
   hasSubmitted,
   submittedAmount,
   allPlayersReady,
+  inContract = false,
+  minInvestmentRappen = 0,
+  lastContractEvent = null,
   onInvest,
 }) => {
   const [submittingAmount, setSubmittingAmount] = useState<number | null>(null);
@@ -36,7 +38,18 @@ export const InvestmentButtons: React.FC<InvestmentButtonsProps> = ({
     }
   };
 
-  const standardOptions = [0, 20, 40];
+  const opt0 = 0;
+  const opt1 = Math.round(initialBalanceRappen * 0.05);
+  const opt2 = Math.round(initialBalanceRappen * 0.10);
+  const dynamicOptions = [opt0, opt1, opt2];
+
+  const minContractAmount = minInvestmentRappen > 0 ? minInvestmentRappen : opt1;
+
+  const getOptionSubtitle = (amount: number): string => {
+    if (amount === opt0) return 'Kein Beitrag in dieser Runde';
+    if (amount === opt1) return 'Mittlerer Beitrag (Fairer Anteil)';
+    return 'Maximaler Rundenbeitrag';
+  };
 
   return (
     <section className="investment-card">
@@ -47,6 +60,19 @@ export const InvestmentButtons: React.FC<InvestmentButtonsProps> = ({
         </p>
       </div>
 
+      {lastContractEvent && (
+        <div className="lobby-rules-summary" style={{ marginBottom: '1rem', padding: '0.85rem 1rem' }}>
+          <strong>Abkommen-Info:</strong> {lastContractEvent}
+        </div>
+      )}
+
+      {inContract && !hasSubmitted && (
+        <div className="lobby-rules-summary" style={{ marginBottom: '1rem', padding: '0.85rem 1rem' }}>
+          <strong>📜 Sie sind Mitglied im Abkommen:</strong> Ihr Mindestbeitrag beträgt{' '}
+          <strong>{formatFr(minContractAmount)}</strong> in dieser Runde.
+        </div>
+      )}
+
       {hasSubmitted ? (
         <div className="investment-confirmed">
           <div className="investment-confirmed__icon">✓</div>
@@ -54,16 +80,19 @@ export const InvestmentButtons: React.FC<InvestmentButtonsProps> = ({
             <h3>Einsatz für diese Runde eingeloggt: {formatFr(submittedAmount ?? 0)}</h3>
             <p>
               {allPlayersReady
-                ? 'Alle 6 Spieler haben gewählt. Warten auf Freigabe der nächsten Runde durch den Versuchsleiter...'
+                ? 'Alle Spieler haben gewählt. Warten auf Freigabe der nächsten Runde durch den Versuchsleiter...'
                 : 'Ihre Auswahl ist gespeichert. Warten auf die verbleibenden Mitspieler...'}
             </p>
           </div>
         </div>
       ) : (
         <div className="investment-grid">
-          {standardOptions.map((amount) => {
+          {dynamicOptions.map((amount) => {
+            const isBlockedByContract = inContract && amount < minContractAmount && !allowedOptions.includes(amount);
             const isAllowed = allowedOptions.includes(amount) && currentBalanceRappen >= amount;
-            const subtitle = OPTION_SUBTITLES[amount] || 'Beitrag';
+            const subtitle = isBlockedByContract
+              ? `Gesperrt durch Klimaabkommen (Min. ${formatFr(minContractAmount)})`
+              : getOptionSubtitle(amount);
             const isLoading = submittingAmount === amount;
 
             return (
@@ -77,7 +106,11 @@ export const InvestmentButtons: React.FC<InvestmentButtonsProps> = ({
                 <span className="invest-btn__amount">{formatFr(amount)}</span>
                 <span className="invest-btn__desc">{subtitle}</span>
                 <span className="invest-btn__action">
-                  {isLoading ? 'Wird gespeichert...' : 'Jetzt einzahlen →'}
+                  {isBlockedByContract
+                    ? `Min. ${formatFr(minContractAmount)} Pflicht`
+                    : isLoading
+                    ? 'Wird gespeichert...'
+                    : 'Jetzt einzahlen →'}
                 </span>
               </button>
             );
