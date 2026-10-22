@@ -1,6 +1,7 @@
 package ch.bbw.climategame.service;
 
 import ch.bbw.climategame.config.AppProperties;
+import ch.bbw.climategame.dto.request.SubmitSurveyRequest;
 import ch.bbw.climategame.dto.response.EndgameResultDto;
 import ch.bbw.climategame.dto.response.GameStateResponse;
 import ch.bbw.climategame.dto.response.JoinLobbyResponse;
@@ -9,10 +10,12 @@ import ch.bbw.climategame.dto.response.PlayerStateDto;
 import ch.bbw.climategame.dto.response.RoundHistoryDto;
 import ch.bbw.climategame.entity.GameSession;
 import ch.bbw.climategame.entity.Player;
+import ch.bbw.climategame.entity.PlayerSurvey;
 import ch.bbw.climategame.entity.RoundInvestment;
 import ch.bbw.climategame.entity.SessionStatus;
 import ch.bbw.climategame.repository.GameSessionRepository;
 import ch.bbw.climategame.repository.PlayerRepository;
+import ch.bbw.climategame.repository.PlayerSurveyRepository;
 import ch.bbw.climategame.repository.RoundInvestmentRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -34,6 +37,7 @@ public class GameEngineService {
     private final GameSessionRepository sessionRepository;
     private final PlayerRepository playerRepository;
     private final RoundInvestmentRepository investmentRepository;
+    private final PlayerSurveyRepository surveyRepository;
     private final PayoutService payoutService;
     private final AppProperties appProperties;
 
@@ -41,12 +45,14 @@ public class GameEngineService {
             GameSessionRepository sessionRepository,
             PlayerRepository playerRepository,
             RoundInvestmentRepository investmentRepository,
+            PlayerSurveyRepository surveyRepository,
             PayoutService payoutService,
             AppProperties appProperties
     ) {
         this.sessionRepository = sessionRepository;
         this.playerRepository = playerRepository;
         this.investmentRepository = investmentRepository;
+        this.surveyRepository = surveyRepository;
         this.payoutService = payoutService;
         this.appProperties = appProperties;
     }
@@ -162,14 +168,14 @@ public class GameEngineService {
         if (!allowedOptions.contains(amountRappen)) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Ungültiger Investitionsbetrag: " + amountRappen + " Rappen. Erlaubt sind: " + allowedOptions
+                    "Ungültiger Investitionsbetrag."
             );
         }
 
         if (tokenPlayer.getCurrentBalanceRappen() < amountRappen) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Nicht genügend Guthaben (" + tokenPlayer.getCurrentBalanceRappen() + " Rappen verfügbar)."
+                    "Nicht genügend Guthaben verfügbar."
             );
         }
 
@@ -187,6 +193,54 @@ public class GameEngineService {
     }
 
     @Transactional
+    public GameStateResponse submitSurvey(String sessionToken, SubmitSurveyRequest request) {
+        if (sessionToken == null || sessionToken.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Kein gültiges Spieler-Token vorhanden.");
+        }
+
+        Player tokenPlayer = playerRepository.findBySessionToken(sessionToken)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Spieler-Sitzung ungültig."));
+
+        GameSession session = sessionRepository.findByIdForUpdate(tokenPlayer.getSession().getId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session nicht gefunden."));
+
+        if (session.getStatus() != SessionStatus.FINISHED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Der Fragebogen kann erst nach Abschluss der 10 Runden ausgefüllt werden.");
+        }
+
+        if (surveyRepository.existsBySessionIdAndPlayerNumber(session.getId(), tokenPlayer.getPlayerNumber())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Sie haben den Fragebogen bereits abgeschickt.");
+        }
+
+        String formattedRanking = formatRankingList(request.motivationRanking());
+
+        PlayerSurvey survey = new PlayerSurvey();
+        survey.setSession(session);
+        survey.setPlayer(tokenPlayer);
+        survey.setPlayerNumber(tokenPlayer.getPlayerNumber());
+        survey.setExpectedProbabilityPct(request.expectedProbabilityPct());
+        survey.setReactionToUnfairness(request.reactionToUnfairness().trim());
+        survey.setMotivationRanking(formattedRanking);
+        survey.setContractJoinedReason(cleanNullable(request.contractJoinedReason()));
+        survey.setContractNotJoinedReason(cleanNullable(request.contractNotJoinedReason()));
+        survey.setContractLeftReason(cleanNullable(request.contractLeftReason()));
+        survey.setContractStayedReason(cleanNullable(request.contractStayedReason()));
+        survey.setAge(request.age());
+        survey.setGender(request.gender().trim());
+        survey.setTwintPhone(request.twintPhone().trim());
+
+        surveyRepository.save(survey);
+
+        tokenPlayer.setLastSeenAt(Instant.now());
+        playerRepository.save(tokenPlayer);
+
+        List<Player> allPlayers = playerRepository.findBySessionIdOrderByPlayerNumberAsc(session.getId());
+        List<RoundInvestment> allInvestments = investmentRepository.findBySessionIdOrderByRoundNumberAscPlayerNumberAsc(session.getId());
+
+        return buildGameStateResponse(session, tokenPlayer, allPlayers, allInvestments);
+    }
+
+    @Transactional
     public void advanceRoundOrFinish(GameSession session) {
         int totalRounds = appProperties.getGame().getTotalRounds();
         if (session.getCurrentRound() < totalRounds) {
@@ -194,12 +248,35 @@ public class GameEngineService {
             session.setRoundStartTime(Instant.now());
             sessionRepository.save(session);
         } else {
+            // Nach Runde 10 -> Endabrechnung berechnen & Status FINISHED setzen.
+            // Spieler sehen zuerst den Fragebogen und sofort nach dem Absenden automatisch ihr Resultat!
             List<Player> allPlayers = playerRepository.findBySessionIdOrderByPlayerNumberAsc(session.getId());
             List<RoundInvestment> allInvestments = investmentRepository.findBySessionIdOrderByRoundNumberAscPlayerNumberAsc(session.getId());
             payoutService.resolveEndgame(session, allPlayers, allInvestments);
             playerRepository.saveAll(allPlayers);
             sessionRepository.save(session);
         }
+    }
+
+    private String formatRankingList(List<String> items) {
+        if (items == null || items.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < items.size(); i++) {
+            if (i > 0) {
+                sb.append(" | ");
+            }
+            sb.append(i + 1).append(". ").append(items.get(i).trim());
+        }
+        return sb.toString();
+    }
+
+    private String cleanNullable(String val) {
+        if (val == null || val.isBlank()) {
+            return null;
+        }
+        return val.trim();
     }
 
     private void recordInvestmentInternal(
@@ -278,8 +355,14 @@ public class GameEngineService {
                 .filter(inv -> inv.getRoundNumber() == currentRound)
                 .collect(Collectors.toMap(RoundInvestment::getPlayerNumber, inv -> inv, (a, b) -> a));
 
+        Set<Integer> surveyedPlayerNumbers = surveyRepository.findBySessionIdOrderByPlayerNumberAsc(session.getId())
+                .stream()
+                .map(PlayerSurvey::getPlayerNumber)
+                .collect(Collectors.toSet());
+
         RoundInvestment myCurrentRoundInvestment = currentRoundInvestments.get(player.getPlayerNumber());
-        boolean hasSubmitted = myCurrentRoundInvestment != null;
+        boolean hasSubmittedRound = myCurrentRoundInvestment != null;
+        boolean hasSubmittedSurvey = surveyedPlayerNumbers.contains(player.getPlayerNumber());
         Integer myCurrentAmount = myCurrentRoundInvestment != null ? myCurrentRoundInvestment.getAmountRappen() : null;
 
         List<Integer> allowedOptions = appProperties.getGame().getAllowedInvestmentOptions().stream()
@@ -293,10 +376,11 @@ public class GameEngineService {
                 player.getInitialBalanceRappen(),
                 player.getCurrentBalanceRappen(),
                 ownTotalInvested,
-                hasSubmitted,
+                hasSubmittedRound,
+                hasSubmittedSurvey,
                 myCurrentAmount,
                 allowedOptions,
-                player.getFinalPayoutRappen()
+                hasSubmittedSurvey ? player.getFinalPayoutRappen() : null
         );
 
         List<PlayerSlotStatusDto> slots = new ArrayList<>();
@@ -306,7 +390,7 @@ public class GameEngineService {
             if (session.getStatus() == SessionStatus.LOBBY) {
                 isReady = isConnected;
             } else if (session.getStatus() == SessionStatus.FINISHED) {
-                isReady = true;
+                isReady = surveyedPlayerNumbers.contains(pNum);
             } else {
                 isReady = currentRoundInvestments.containsKey(pNum);
             }
@@ -314,11 +398,13 @@ public class GameEngineService {
         }
 
         List<RoundHistoryDto> history = buildCompletedRoundHistory(session, allInvestments, groupSize);
-        EndgameResultDto endgameDto = payoutService.buildEndgameResultDto(session, player);
+        // Resultat erst mitliefern, sobald der Spieler seinen Fragebogen abgeschickt hat!
+        EndgameResultDto endgameDto = (session.getStatus() == SessionStatus.FINISHED && hasSubmittedSurvey)
+                ? payoutService.buildEndgameResultDto(session, player)
+                : null;
         int riskPercent = (int) Math.round(session.getRiskLevel().doubleValue() * 100.0);
 
-        // Gesamtfonds nach abgeschlossenen Runden (damit während der laufenden Runde keine Live-Bets anderer Spieler geleakt werden)
-        int visibleTotalPotRappen = session.getStatus() == SessionStatus.FINISHED
+        int visibleTotalPotRappen = (session.getStatus() == SessionStatus.FINISHED && hasSubmittedSurvey)
                 ? session.getTotalPotRappen()
                 : allInvestments.stream()
                         .filter(inv -> inv.getRoundNumber() < currentRound)

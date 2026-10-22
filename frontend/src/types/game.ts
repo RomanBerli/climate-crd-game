@@ -8,12 +8,26 @@ export interface JoinLobbyResponse {
   sessionToken: string;
 }
 
+export interface SubmitSurveyPayload {
+  expectedProbabilityPct: number;
+  reactionToUnfairness: string;
+  motivationRanking: string[];
+  contractJoinedReason?: string | null;
+  contractNotJoinedReason?: string | null;
+  contractLeftReason?: string | null;
+  contractStayedReason?: string | null;
+  age: number;
+  gender: string;
+  twintPhone: string;
+}
+
 export interface PlayerStateDto {
   playerNumber: number;
   initialBalanceRappen: number;
   currentBalanceRappen: number;
   ownTotalInvestedRappen: number;
   hasSubmittedCurrentRound: boolean;
+  hasSubmittedSurvey: boolean;
   currentRoundInvestmentRappen: number | null;
   allowedInvestmentOptions: number[];
   finalPayoutRappen: number | null;

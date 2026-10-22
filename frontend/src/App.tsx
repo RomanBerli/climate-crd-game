@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useGamePolling } from './hooks/useGamePolling';
 import { LobbyPage } from './pages/LobbyPage';
 import { GamePage } from './pages/GamePage';
+import { SurveyPage } from './pages/SurveyPage';
 import { EndgamePage } from './pages/EndgamePage';
 import { AdminPage } from './pages/AdminPage';
 
@@ -51,7 +52,6 @@ export const App: React.FC = () => {
     );
   }
 
-  // Reconnect & State Routing (Spec 4.2 & Plan 3.5)
   if (gameState && gameState.status === 'RUNNING') {
     return (
       <GamePage
@@ -62,6 +62,14 @@ export const App: React.FC = () => {
   }
 
   if (gameState && gameState.status === 'FINISHED') {
+    if (!gameState.player.hasSubmittedSurvey) {
+      return (
+        <SurveyPage
+          gameState={gameState}
+          onStateUpdated={setGameStateDirectly}
+        />
+      );
+    }
     return <EndgamePage gameState={gameState} onResetSession={refreshNow} />;
   }
 

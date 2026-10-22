@@ -62,7 +62,8 @@ export function useGamePolling(enabled: boolean = true): UseGamePollingResult {
     }
   }, [enabled, refreshNow]);
 
-  // Polling (alle 1200ms) NUR wenn der Spieler tatsächlich einem Raum beigetreten ist (Warteraum oder laufendes Spiel)
+  // Polling (alle 1200ms) NUR im Warteraum (LOBBY) oder während des laufenden Spiels (RUNNING).
+  // Im Login-Dashboard, im Fragebogen und im Endresultat-Screen wird NICHT gepollt.
   const shouldPoll =
     enabled &&
     gameState !== null &&

@@ -69,6 +69,15 @@ export const LiveSessionCard: React.FC<LiveSessionCardProps> = ({
                   </strong>
                 </>
               )}
+              {session.status === 'FINISHED' && (
+                <>
+                  {' '}
+                  • Fragebogen ausgefüllt:{' '}
+                  <strong>
+                    {session.readyPlayersCount} / {session.groupSize} Spieler
+                  </strong>
+                </>
+              )}
             </p>
           </div>
         </div>
@@ -99,13 +108,13 @@ export const LiveSessionCard: React.FC<LiveSessionCardProps> = ({
               title={
                 session.canAdvanceRound
                   ? isLastRound
-                    ? 'Runde 10 abschliessen und Auszahlung berechnen'
+                    ? 'Runde 10 abschliessen und Experiment beenden'
                     : `Runde ${session.currentRound + 1} starten`
                   : `Warten bis alle ${session.groupSize} Spieler gewählt haben (${session.readyPlayersCount}/${session.groupSize})`
               }
             >
               {isLastRound
-                ? `🏁 Experiment abschliessen (${session.readyPlayersCount}/${session.groupSize})`
+                ? `🏁 Experiment abschliessen (${session.readyPlayersCount}/${session.groupSize} bereit)`
                 : `⏭ Nächste Runde (${session.readyPlayersCount}/${session.groupSize} bereit)`}
             </button>
           )}
@@ -160,7 +169,9 @@ export const LiveSessionCard: React.FC<LiveSessionCardProps> = ({
                   : session.status === 'LOBBY'
                   ? '✓ In Lobby'
                   : session.status === 'FINISHED'
-                  ? 'Abgeschlossen'
+                  ? p.isReadyCurrentRound
+                    ? '✓ Fragebogen fertig'
+                    : '📝 Fragebogen offen'
                   : p.isReadyCurrentRound
                   ? '✓ Hat gewählt'
                   : '⏳ Überlegt...'}

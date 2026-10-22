@@ -1,5 +1,6 @@
 package ch.bbw.climategame;
 
+import ch.bbw.climategame.dto.request.SubmitSurveyRequest;
 import ch.bbw.climategame.dto.response.AdminSessionResponse;
 import ch.bbw.climategame.dto.response.GameStateResponse;
 import ch.bbw.climategame.dto.response.JoinLobbyResponse;
@@ -53,7 +54,7 @@ class ClimateGameIntegrationTest {
     }
 
     @Test
-    void fullMilinskiExperimentWithManualAdminRoundAdvanceAndCsvExport() {
+    void fullMilinskiExperimentWithSurveyAndCsvExport() {
         AdminSessionResponse created = adminService.createSession(GameMode.NORMAL);
         assertThat(created.code()).hasSize(4);
         assertThat(created.gameMode()).isEqualTo(GameMode.NORMAL);
@@ -99,7 +100,7 @@ class ClimateGameIntegrationTest {
             assertThat(readyAdminState.readyPlayersCount()).isEqualTo(6);
             assertThat(readyAdminState.canAdvanceRound()).isTrue();
 
-            // Admin clicks next round (or finishes after round 10)
+            // Admin clicks next round (or moves to SURVEY after round 10)
             AdminSessionResponse advanced = adminService.advanceRound(created.id());
             if (round < 10) {
                 assertThat(advanced.currentRound()).isEqualTo(round + 1);
@@ -113,23 +114,59 @@ class ClimateGameIntegrationTest {
                 assertThat(stateInNextRound.history().get(0).cumulativePotRappen()).isEqualTo(round * 120);
                 assertThat(stateInNextRound.totalPotRappen()).isEqualTo(round * 120);
             } else {
+                // After Round 10 -> Session is FINISHED, players individually fill survey before seeing result
                 assertThat(advanced.status()).isEqualTo(SessionStatus.FINISHED);
+                assertThat(advanced.readyPlayersCount()).isEqualTo(0);
             }
         }
 
-        // Check final state
-        GameStateResponse finalState = gameEngineService.getPlayerGameState(joinedPlayers.get(5).sessionToken());
-        assertThat(finalState.status()).isEqualTo(SessionStatus.FINISHED);
-        assertThat(finalState.endgame()).isNotNull();
-        assertThat(finalState.endgame().isGoalReached()).isTrue();
-        assertThat(finalState.endgame().finalPayoutRappen()).isEqualTo(200);
-        assertThat(finalState.endgame().message()).isEqualTo("Klimaziel erreicht! Ihr Restguthaben wird ausbezahlt.");
+        // Before submitting the survey, the player's state is FINISHED with hasSubmittedSurvey=false and endgame=null
+        GameStateResponse stateBeforeSurvey = gameEngineService.getPlayerGameState(joinedPlayers.get(0).sessionToken());
+        assertThat(stateBeforeSurvey.status()).isEqualTo(SessionStatus.FINISHED);
+        assertThat(stateBeforeSurvey.player().hasSubmittedSurvey()).isFalse();
+        assertThat(stateBeforeSurvey.endgame()).isNull();
 
-        // Check CSV export
+        // Players 1 to 6 submit their survey and immediately receive the final result in the response
+        for (int i = 0; i < 6; i++) {
+            GameStateResponse afterSurvey = gameEngineService.submitSurvey(
+                    joinedPlayers.get(i).sessionToken(),
+                    new SubmitSurveyRequest(
+                            75,
+                            "Ich habe gleich weitergemacht.",
+                            List.of(
+                                    "dass die Gruppe das Ziel erreicht",
+                                    "fair zu sein bzw. meinen Anteil zu leisten",
+                                    "den Verlust des eigenen Geldes vermeiden",
+                                    "möglichst viel eigenes Geld behalten",
+                                    "den Preis zu gewinnen"
+                            ),
+                            null,
+                            null,
+                            null,
+                            null,
+                            18 + i,
+                            i == 5 ? "Frau" : "Mann",
+                            i == 5 ? "079 999 88 77" : "079 111 22 3" + i
+                    )
+            );
+            assertThat(afterSurvey.status()).isEqualTo(SessionStatus.FINISHED);
+            assertThat(afterSurvey.player().hasSubmittedSurvey()).isTrue();
+            assertThat(afterSurvey.endgame()).isNotNull();
+            assertThat(afterSurvey.endgame().isGoalReached()).isTrue();
+            assertThat(afterSurvey.endgame().finalPayoutRappen()).isEqualTo(200);
+            assertThat(afterSurvey.endgame().message()).isEqualTo("Klimaziel erreicht! Ihr Restguthaben wird ausbezahlt.");
+        }
+
+        AdminSessionResponse surveyReadyState = adminService.getSession(created.id());
+        assertThat(surveyReadyState.readyPlayersCount()).isEqualTo(6);
+
+        // Check CSV export includes survey columns and answers
         String csv = adminService.exportSessionCsv(created.id());
         String[] lines = csv.trim().split("\n");
         // 1 header + 60 investment rows (10 rounds * 6 players)
         assertThat(lines).hasSize(61);
-        assertThat(lines[0]).startsWith("session_id,session_code,risk_treatment,target_sum_rappen,total_invested_rappen");
+        assertThat(lines[0]).contains("survey_expected_probability_pct,survey_reaction_unfairness,survey_motivation_ranking");
+        assertThat(csv).contains("079 999 88 77");
+        assertThat(csv).contains("Frau");
     }
 }

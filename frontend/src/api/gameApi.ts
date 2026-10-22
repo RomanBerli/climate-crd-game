@@ -1,5 +1,5 @@
 import { apiRequest, setStoredPlayerToken } from './client';
-import { GameStateResponse, JoinLobbyResponse } from '../types/game';
+import { GameStateResponse, JoinLobbyResponse, SubmitSurveyPayload } from '../types/game';
 
 export async function joinLobby(code: string): Promise<JoinLobbyResponse> {
   const response = await apiRequest<JoinLobbyResponse>('/api/lobby/join', {
@@ -28,5 +28,12 @@ export async function submitInvestment(amountRappen: number): Promise<GameStateR
   return apiRequest<GameStateResponse>('/api/game/invest', {
     method: 'POST',
     body: JSON.stringify({ amountRappen }),
+  });
+}
+
+export async function submitSurvey(payload: SubmitSurveyPayload): Promise<GameStateResponse> {
+  return apiRequest<GameStateResponse>('/api/game/survey', {
+    method: 'POST',
+    body: JSON.stringify(payload),
   });
 }

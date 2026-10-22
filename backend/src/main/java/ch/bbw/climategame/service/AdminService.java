@@ -5,10 +5,12 @@ import ch.bbw.climategame.dto.response.AdminSessionResponse;
 import ch.bbw.climategame.entity.GameMode;
 import ch.bbw.climategame.entity.GameSession;
 import ch.bbw.climategame.entity.Player;
+import ch.bbw.climategame.entity.PlayerSurvey;
 import ch.bbw.climategame.entity.RoundInvestment;
 import ch.bbw.climategame.entity.SessionStatus;
 import ch.bbw.climategame.repository.GameSessionRepository;
 import ch.bbw.climategame.repository.PlayerRepository;
+import ch.bbw.climategame.repository.PlayerSurveyRepository;
 import ch.bbw.climategame.repository.RoundInvestmentRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -21,7 +23,9 @@ import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -34,6 +38,7 @@ public class AdminService {
     private final GameSessionRepository sessionRepository;
     private final PlayerRepository playerRepository;
     private final RoundInvestmentRepository investmentRepository;
+    private final PlayerSurveyRepository surveyRepository;
     private final GameEngineService gameEngineService;
     private final AppProperties appProperties;
 
@@ -41,12 +46,14 @@ public class AdminService {
             GameSessionRepository sessionRepository,
             PlayerRepository playerRepository,
             RoundInvestmentRepository investmentRepository,
+            PlayerSurveyRepository surveyRepository,
             GameEngineService gameEngineService,
             AppProperties appProperties
     ) {
         this.sessionRepository = sessionRepository;
         this.playerRepository = playerRepository;
         this.investmentRepository = investmentRepository;
+        this.surveyRepository = surveyRepository;
         this.gameEngineService = gameEngineService;
         this.appProperties = appProperties;
     }
@@ -156,20 +163,32 @@ public class AdminService {
         Map<Integer, Player> playerByNumber = players.stream()
                 .collect(Collectors.toMap(Player::getPlayerNumber, p -> p));
 
+        Map<Integer, PlayerSurvey> surveyByNumber = surveyRepository
+                .findBySessionIdOrderByPlayerNumberAsc(session.getId())
+                .stream()
+                .collect(Collectors.toMap(PlayerSurvey::getPlayerNumber, s -> s, (a, b) -> a));
+
         List<RoundInvestment> investments = investmentRepository
                 .findBySessionIdOrderByRoundNumberAscPlayerNumberAsc(session.getId());
 
         StringBuilder sb = new StringBuilder();
-        sb.append("session_id,session_code,risk_treatment,target_sum_rappen,total_invested_rappen,target_reached,risk_occurred,round,player_number,invested_rappen,is_auto_bet,submitted_at,final_payout_rappen\n");
+        // UTF-8 BOM für korrekte Umlaute in Microsoft Excel
+        sb.append('\uFEFF');
+        sb.append("session_id,session_code,game_mode,risk_treatment,target_sum_rappen,total_invested_rappen,target_reached,risk_occurred,round,player_number,invested_rappen,invested_chf,is_auto_bet,submitted_at,final_payout_rappen,final_payout_chf,survey_expected_probability_pct,survey_reaction_unfairness,survey_motivation_ranking,survey_contract_joined_reason,survey_contract_not_joined_reason,survey_contract_left_reason,survey_contract_stayed_reason,survey_age,survey_gender,survey_twint_phone\n");
 
         for (RoundInvestment inv : investments) {
             Player p = playerByNumber.get(inv.getPlayerNumber());
-            int finalPayout = (p != null && p.getFinalPayoutRappen() != null)
+            PlayerSurvey survey = surveyByNumber.get(inv.getPlayerNumber());
+            int finalPayoutRappen = (p != null && p.getFinalPayoutRappen() != null)
                     ? p.getFinalPayoutRappen()
                     : (p != null ? p.getCurrentBalanceRappen() : 0);
 
-            sb.append('"').append(session.getId()).append("\",")
-                    .append('"').append(session.getCode()).append("\",")
+            String investedChf = String.format(Locale.US, "%.2f", inv.getAmountRappen() / 100.0);
+            String finalPayoutChf = String.format(Locale.US, "%.2f", finalPayoutRappen / 100.0);
+
+            sb.append(csvEscape(session.getId().toString())).append(',')
+                    .append(csvEscape(session.getCode())).append(',')
+                    .append(csvEscape(session.getGameMode().name())).append(',')
                     .append(session.getRiskLevel().toPlainString()).append(',')
                     .append(session.getTargetSumRappen()).append(',')
                     .append(session.getTotalPotRappen()).append(',')
@@ -178,13 +197,33 @@ public class AdminService {
                     .append(inv.getRoundNumber()).append(',')
                     .append(inv.getPlayerNumber()).append(',')
                     .append(inv.getAmountRappen()).append(',')
+                    .append(investedChf).append(',')
                     .append(inv.isAutoBet()).append(',')
-                    .append('"').append(inv.getCreatedAt() != null ? inv.getCreatedAt().toString() : "").append("\",")
-                    .append(finalPayout)
+                    .append(csvEscape(inv.getCreatedAt() != null ? inv.getCreatedAt().toString() : "")).append(',')
+                    .append(finalPayoutRappen).append(',')
+                    .append(finalPayoutChf).append(',')
+                    .append(survey != null ? survey.getExpectedProbabilityPct() : "").append(',')
+                    .append(csvEscape(survey != null ? survey.getReactionToUnfairness() : "")).append(',')
+                    .append(csvEscape(survey != null ? survey.getMotivationRanking() : "")).append(',')
+                    .append(csvEscape(survey != null ? survey.getContractJoinedReason() : "")).append(',')
+                    .append(csvEscape(survey != null ? survey.getContractNotJoinedReason() : "")).append(',')
+                    .append(csvEscape(survey != null ? survey.getContractLeftReason() : "")).append(',')
+                    .append(csvEscape(survey != null ? survey.getContractStayedReason() : "")).append(',')
+                    .append(survey != null ? survey.getAge() : "").append(',')
+                    .append(csvEscape(survey != null ? survey.getGender() : "")).append(',')
+                    .append(csvEscape(survey != null ? survey.getTwintPhone() : ""))
                     .append('\n');
         }
 
         return sb.toString();
+    }
+
+    private String csvEscape(String value) {
+        if (value == null) {
+            return "\"\"";
+        }
+        String escaped = value.replace("\"", "\"\"");
+        return "\"" + escaped + "\"";
     }
 
     private AdminSessionResponse buildAdminSessionResponse(GameSession session) {
@@ -194,6 +233,11 @@ public class AdminService {
         List<RoundInvestment> currentRoundInvestmentsList = currentRound > 0
                 ? investmentRepository.findBySessionIdAndRoundNumberOrderByPlayerNumberAsc(session.getId(), currentRound)
                 : List.of();
+
+        Set<Integer> surveyedPlayerNumbers = surveyRepository.findBySessionIdOrderByPlayerNumberAsc(session.getId())
+                .stream()
+                .map(PlayerSurvey::getPlayerNumber)
+                .collect(Collectors.toSet());
 
         int groupSize = appProperties.getGame().getGroupSize();
         int totalRounds = appProperties.getGame().getTotalRounds();
@@ -215,7 +259,7 @@ public class AdminService {
                 if (session.getStatus() == SessionStatus.LOBBY) {
                     isReady = true;
                 } else if (session.getStatus() == SessionStatus.FINISHED) {
-                    isReady = true;
+                    isReady = surveyedPlayerNumbers.contains(pNum);
                 } else {
                     isReady = currentInv != null;
                 }

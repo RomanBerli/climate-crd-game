@@ -8,6 +8,7 @@ public record PlayerStateDto(
         int currentBalanceRappen,
         int ownTotalInvestedRappen,
         boolean hasSubmittedCurrentRound,
+        boolean hasSubmittedSurvey,
         Integer currentRoundInvestmentRappen,
         List<Integer> allowedInvestmentOptions,
         Integer finalPayoutRappen
