@@ -1,104 +1,125 @@
-# Spezifikation: Replikation "Collective-Risk Social Dilemma" (Milinski-Experiment)
+# System-Spezifikation: Collective-Risk Social Dilemma Experiment
 
-## Experiment on basis of:
-The collective-risk social dilemma and the prevention
-of simulated dangerous climate change
-**Link to paper**: https://www.pnas.org/doi/10.1073/pnas.0709546105
+## 1. Projektübersicht & Zielsetzung
+Entwicklung einer webbasierten Applikation zur Durchführung eines spieltheoretischen Klima-Experiments (basierend auf *Milinski et al., 2008: "The collective-risk social dilemma and the maintenance of global climate"*).
+Die Plattform ermöglicht es Spielern in Gruppen über mehrere Runden hinweg Entscheidungen über Beiträge in ein gemeinsames Klimakonto zu treffen, unterstützt sowohl das klassische Basisspiel (**Variante 1: Standard**) als auch ein optionales **Klimaabkommen mit Mindestbeitrag, Austrittsgebühren und Abschaffungsabstimmungen (Variante 2: Mit Klimaabkommen)** und erhebt im Anschluss einen wissenschaftlichen Fragebogen.
 
+---
 
-## 1. Spielmechanik und Kernparameter
+## 2. Spielregeln & Domänenlogik (Game Mechanics)
 
-### 1.1 Kernvariablen und Finanz-Logik
-Das System verwendet relative Ableitungen basierend auf einem zentralen Startbetrag. 
+### 2.1 Grundparameter & Konfiguration
+Alle Spielparameter werden zentral in [`application.yml`](backend/src/main/resources/application.yml) (bzw. über Umgebungsvariablen) konfiguriert:
+* **Startkapital (`StartAmount`):** Standardmässig `4 Fr.` (intern als `400` Rappen gespeichert, um Fliesskommafehler zu vermeiden).
+* **Gruppengrösse (`GroupSize`):** Standardmässig `6` Spieler pro Session.
+* **Rundenanzahl (`TotalRounds`):** Standardmässig `10` Runden.
+* **Klimaziel (`TargetAmount`):** Automatisch berechnet als $50\%$ des gesamten Gruppen-Startkapitals:
+  $$\text{TargetAmount} = \text{GroupSize} \times \text{StartAmount} \times 0.5$$
+  *(Bei 6 Spielern à 4 Fr. beträgt das Gesamtkapital 24 Fr. und das Klimaziel **12 Fr.**)*
+* **Verlustrisiko (`RiskLevel`):** Standardmässig $90\%$ (`0.90`). Wird das Klimaziel nach der letzten Runde verfehlt, verlieren alle Spieler mit einer Wahrscheinlichkeit von $90\%$ ihr gesamtes verbliebenes Restguthaben.
+* **Währungsanzeige im UI:** Sämtliche Beträge werden im gesamten Frontend ausschliesslich in **Franken (`Fr.`)** dargestellt (z. B. `0 Fr.`, `0.2 Fr.`, `0.4 Fr.`, `4 Fr.`, `12 Fr.`).
 
-**Umgebungsvariablen (Environment Variables):**
-* `ENV_START_AMOUNT`: Startkapital pro Spieler in CHF (Integer/Float, Default: 4)
-* `ENV_GROUP_SIZE`: Anzahl der Spieler pro Gruppe (Integer, Default: 6)
-* `ENV_TOTAL_ROUNDS`: Anzahl der Spielrunden (Integer, Default: 10)
+### 2.2 Anonymität, Lobby & Inaktivitäts-Schutz
+* **Pseudonyme:** Beim Betreten einer Session erhält jeder Spieler automatisch ein zufälliges, neutrales Klima-/Wetter-Pseudonym (z. B. *Monsun*, *Passat*, *Taifun*, *Golfstrom*, *Jetstream*, *Polarwirbel*). Klarnamen werden im Spiel nicht angezeigt.
+* **Aktives Verlassen:** Verlässt ein Spieler den Warteraum über den Button `"Raum verlassen"` (`POST /api/lobby/leave`), wird sein Spieler-Datensatz sofort aus der Datenbank gelöscht und der Platz in der Lobby wieder freigegeben.
+* **Automatischer Inaktivitäts-Kick (30s):** Spieler in der `LOBBY`, die länger als **30 Sekunden** kein Lebenszeichen (Polling) senden (z. B. durch Schliessen des Browser-Tabs), werden automatisch aus der Session entfernt, damit keine Plätze durch inaktive Verbindungen blockiert bleiben.
+* **Session-Persistenz:** Über den `sessionToken` im `localStorage` können aktive Spieler bei einem Seiten-Reload nahtlos in ihre laufende Sitzung zurückkehren.
 
-**Abgeleitete System-Variablen (berechnet beim Session-Start):**
-* `TARGET_SUM` (Kollektives Ziel): `(ENV_START_AMOUNT / 2) * ENV_GROUP_SIZE`
-  *(Logik: Die Gruppe muss gemeinsam genau die Hälfte ihres Gesamt-Startkapitals opfern, um das Ziel zu erreichen).*
-* `INVEST_OPTION_0`: `0` (Kostenlos / Trittbrettfahrer)
-* `INVEST_OPTION_1`: `ENV_START_AMOUNT * 0.05` (Fairer Anteil)
-* `INVEST_OPTION_2`: `ENV_START_AMOUNT * 0.10` (Altruistischer Anteil)
+### 2.3 Rundenablauf & Manuelle Steuerung (Variante 1 & 2)
+* **Kein Rundentimer / Kein Auto-Bet:** Es gibt keinen Countdown und keine automatische Zwangswahl. Alle Spieler treffen ihre Entscheidung in ihrem eigenen Tempo.
+* **Beitragsoptionen pro Runde:** Jeder Spieler wählt in der Investitionsphase (`INVESTMENT`) eine von drei diskreten Optionen bezogen auf das Startkapital:
+  * **0%** (`0 Fr.`)
+  * **5%** (`0.2 Fr.` – der faire Durchschnittsbeitrag)
+  * **10%** (`0.4 Fr.`)
+* **Manuelle Rundenfreigabe durch den Admin:** Sobald alle Spieler der Session ihre Entscheidung für die aktuelle Runde eingereicht haben (`allPlayersReadyForNextRound`), schaltet der Experimentator im Admin-Dashboard manuell in die nächste Runde weiter (`POST /api/admin/sessions/{id}/next-round`) bzw. schliesst nach Runde 10 das Experiment ab.
 
-### 1.2 State Management & Timer-Logik
-Um das Experiment bei Verbindungsabbrüchen oder Inaktivität einzelner Spieler am Laufen zu halten, implementiert das System einen zweistufigen Runden-Timer:
-* **Reguläre Phase:** 60 Sekunden. Die Spieler werden aufgefordert, ihre Investition für die aktuelle Runde zu tätigen.
-* **Overtime-Phase:** 30 Sekunden. Läuft die reguläre Phase ab, startet ein visuell hervorgehobener Countdown.
-* **Fallback (Auto-Bet):** Tätigt ein Spieler nach insgesamt 90 Sekunden keine Eingabe, loggt das System serverseitig automatisch den mittleren Investitionswert ein (entspricht `INVEST_OPTION_1` / dem fairen Anteil). Der Status des Spielers wird auf "ready" gesetzt und die Gruppe rückt in die nächste Runde vor.
+### 2.4 Informations-Sichtbarkeit & Lokaler Notizblock
+* **Kein Gesamttopf während des Spiels:** Während das Spiel läuft (`RUNNING`), wird den Spielern die kumulierte Gesamtsumme im Klimakonto **nicht** angezeigt.
+* **Nur letzte abgeschlossene Runde sichtbar:** Ab Runde 2 sehen die Spieler in der Rückblick-Tabelle ausschliesslich die Einzelbeiträge jedes Gruppenmitglieds sowie die Rundensumme der **unmittelbar vorangegangenen Runde** (nicht die gesamte Historie aller früheren Runden).
+* **Lokaler Notizblock:** Um den Überblick über die eigenen Berechnungen und bisherige Zahlungen zu behalten, steht jedem Spieler auf der rechten Seite ein privater Notizblock zur Verfügung, der ausschliesslich lokal im Browser (`localStorage`) gespeichert wird.
 
-### 1.3 Währung, State-Tracking und Payout
-* **Währung (Backend):** Alle Berechnungen im Backend basieren auf der Basiswährung (CHF).
-* **Abrechnungs-Logik:** Das System trackt das individuelle Restguthaben über alle 10 Runden. 
-    * *Szenario A (Ziel erreicht):* Guthaben = Startkapital - getätigte Investitionen.
-    * *Szenario B (Ziel verfehlt, Risiko tritt NICHT ein):* Guthaben = Startkapital - getätigte Investitionen.
-    * *Szenario C (Ziel verfehlt, Risiko tritt ein):* Guthaben = 0.
-* **Endbildschirm (Payout):** Nach Abschluss des Experiments wird dem Spieler sein individueller Endbetrag angezeigt. Als Identifikator dient lediglich die zugewiesene Spielernummer (z. B. "Spieler 3") sowie der Session-Code.
+---
 
-### 1.4 UI-Restriktionen & Kognitive Last
-Um die psychologische Dynamik des Original-Experiments zu replizieren, gelten strikte UI-Vorgaben:
-* **Kein Fortschrittsbalken:** Die aktuell kumulierte Gesamtsumme des "Klima-Accounts" wird den Spielern im Interface **niemals** angezeigt.
-* **Transparenz der Mitspieler:** Nach jeder Runde werden die Einzelinvestitionen aller 6 Spieler der vergangenen Runde in einer statischen Reihenfolge angezeigt, damit spezifische Verhaltensmuster identifizierbar bleiben.
-* **Digitaler Notizblock:** Jeder Spieler erhält im UI ein dauerhaftes Freitext-Feld (`<textarea>`), das über alle 10 Runden hinweg sichtbar bleibt. Hier können die Spieler eigene Berechnungen anstellen.
+## 3. Variante 2: Klimaabkommen (`WITH_CONTRACTS`)
 
-## 2. Architektur & Datenhaltung
-Aufgrund des kontrollierten Settings (Versuchsleiter physisch anwesend) wird die Architektur bewusst schlank gehalten.
+Beim Erstellen einer Session im Admin-Dashboard kann zwischen **Variante 1: Standard (Ohne Abkommen)** (`NORMAL`) und **Variante 2: Mit Klimaabkommen (Verträge & Abstimmung)** (`WITH_CONTRACTS`) gewählt werden. In Variante 2 gelten alle Regeln aus Variante 1 sowie zusätzlich folgende Vertragsmechanismen:
 
-**2.1 Frontend & Lokaler State (Spielfeld)**
-* Das Notizfeld der Spieler ist rein lokal. Es wird im Browser-State gehalten und **nicht** an den Server übermittelt.
-* Auf dem Endbildschirm wird lediglich die zugewiesene Spielernummer und der auszuzahlende Endbetrag groß und deutlich angezeigt.
+### 3.1 Freiwilliger Beitritt vor Runde 1 (`CONTRACT_JOIN`)
+* Vor der 1. Investitionsrunde entscheidet jeder Spieler freiwillig, ob er dem Klimaabkommen beitritt (`Beitreten`) oder nicht (`Nicht beitreten`).
+* Ein späterer Beitritt in darauffolgenden Runden ist **nicht** möglich.
+* Für alle Spieler ist jederzeit transparent ersichtlich, welche Gruppenmitglieder im Abkommen sind (`📜 Im Abkommen`) und wer ausgetreten ist (`Ausgetreten`).
 
-**2.2 Backend & Datenbank-Schema (Minimal)**
-Das Backend muss nur die Spielmechanik validieren und den Runden-State synchronisieren. Zu speichernde Daten pro Session:
-* `session_id`: Eindeutige ID für die 6er-Gruppe (Spielcode).
-* `current_round`: Integer (1-10).
-* `risk_level`: Das aktive Treatment (z. B. 90%, 50% oder 10%).
-* `players`: Array von 6 Objekten (Spieler 1 bis 6).
-* `investments`: Log der getätigten Einsätze pro Spieler und Runde.
+### 3.2 Technisch erzwungener Mindestbeitrag (`INVESTMENT`)
+* Das Klimaabkommen verpflichtet jedes aktive Mitglied, pro Runde **mindestens 5% (`0.2 Fr.`)** in das Klimakonto einzuzahlen.
+* Die Option `0 Fr.` ist für aktive Abkommensmitglieder sowohl im Frontend gesperrt als auch im Backend technisch blockiert; wählbar sind somit nur `0.2 Fr.` oder `0.4 Fr.`.
 
-## 3. Matchmaking & Admin-Dashboard
-Um einen kontrollierten Start und reibungslosen Ablauf zu garantieren, wird ein dedizierter Admin-Bereich implementiert.
+### 3.3 Vertragsprüfung zwischen zwei Runden (`CONTRACT_REVIEW` & `CONTRACT_VOTE`)
+Vor Beginn jeder neuen Runde (Runden 2 bis 10) durchlaufen alle aktiven Abkommensmitglieder (sofern noch mindestens 2 Mitglieder im Abkommen sind) eine Vertragsphase mit drei Optionen:
+1. **Im Abkommen bleiben (`STAY`):** Der Spieler bleibt regulär im Abkommen.
+2. **Aus dem Abkommen austreten (`LEAVE`):**
+   * Der Spieler verlässt das Abkommen sofort.
+   * **Austrittsgebühr:** Er bezahlt an **jedes verbleibende Abkommensmitglied** eine Gebühr von `0.2 Fr.` (5% des Startkapitals).
+   * Die Summe wird direkt vom Guthaben des Austretenden abgezogen und den Konten der verbleibenden Abkommensmitglieder gutgeschrieben.
+   * Ein Austritt ist nur möglich, wenn das verbleibende persönliche Guthaben des Spielers für die gesamte Austrittsgebühr ausreicht.
+3. **Abstimmung zur Abschaffung starten (`START_VOTE` -> `CONTRACT_VOTE`):**
+   * Startet mindestens ein verbleibendes Mitglied eine Abstimmung, wechseln alle verbleibenden Abkommensmitglieder in die Abstimmungsphase (`CONTRACT_VOTE`).
+   * Jedes Mitglied stimmt für **Abkommen abschaffen** oder **Abkommen behalten**.
+   * **Einfache Mehrheit (> 50%):** Stimmen mehr als die Hälfte der abstimmenden Mitglieder für die Abschaffung, wird das Klimaabkommen sofort für alle aufgelöst. Es fallen **keine Gebühren** an, und ab dieser Runde gibt es keine Mindestbeitragspflicht mehr. Andernfalls bleibt das Abkommen bestehen.
 
-**3.1 Lobby-System & Zugang**
-* **Raum-Erstellung:** Der Admin erstellt im Backend eine neue Session. Das System generiert einen eindeutigen, kurzen Spielcode (z. B. "X7K9").
-* **Spieler-Login:** Die 6 Probanden rufen die Startseite der Web-App auf, geben den Spielcode ein und landen in einem Warteraum (Lobby). Das System weist ihnen automatisch eine Spielernummer (1 bis 6) zu.
+---
 
-**3.2 Admin-Steuerung (Session Management)**
-* **Spielstart:** Sobald der Admin sieht, dass alle 6 Slots gefüllt sind, löst er den Spielstart manuell per Button aus.
-* **Pausen-Funktion:** Der Admin verfügt über einen "Pause"-Button. Bei technischen Schwierigkeiten friert dieser Button das Spiel serverseitig ein.
+## 4. Spielende, Fragebogen & Auswertung (`FINISHED`)
 
-**3.3 Währungsdarstellung (UI)**
-* Im Frontend werden alle Beträge für die Spieler in **Rappen** dargestellt, um eine intuitive, ganzzahlige Darstellung zu gewährleisten (z. B. 400 Rappen Startkapital; Spenden-Optionen 0, 20 oder 40 Rappen).
+### 4.1 Risiko-Wurf & Ergebnisberechnung
+Nach Abschluss der 10. Runde beendet der Admin das Spiel:
+* **Klimaziel erreicht ($\text{TotalPot} \ge \text{TargetAmount}$):** Der Klimawandel wurde erfolgreich abgewendet. Alle Spieler behalten ihr individuelles Restguthaben (`currentBalance`).
+* **Klimaziel verfehlt ($\text{TotalPot} < \text{TargetAmount}$):** Das System zieht eine Zufallszahl (`0.0` bis `1.0`).
+  * Mit **90% Wahrscheinlichkeit** tritt die Klimakatastrophe ein (`survivedRisk = false`) und alle Spieler verlieren ihr gesamtes Restguthaben (`Auszahlung = 0 Fr.`).
+  * Mit **10% Wahrscheinlichkeit** haben die Spieler Glück (`survivedRisk = true`) und behalten ihr Restguthaben trotz verfehltem Ziel.
 
-## 4. Edge Cases, Reconnects & Datenexport
+### 4.2 Wissenschaftlicher Abschluss-Fragebogen (`SurveyPage`)
+Sobald das Spiel den Status `FINISHED` erreicht, wird jedem Spieler **vor** der Ergebnisanzeige automatisch ein Fragebogen angezeigt (ohne weiteres Hintergrund-Polling):
+1. **Erwartete Wahrscheinlichkeit (`0%–100%`):** *"Mit welcher Wahrscheinlichkeit (0% - 100%) hast du erwartet, dass deine Gruppe das Ziel erreicht?"*
+2. **Reaktion auf Ungleichheit (Single-Choice):** Verhalten, wenn andere weniger beigetragen haben (Trotzdem viel gezahlt / Beitrag reduziert / Geärgert, aber gleich weitergemacht / Nicht darauf geachtet).
+3. **Motivations-Ranking (Drag & Drop):** Sortierung von 4 Faktoren nach Wichtigkeit (Eigener Gewinn, Schutz vor Klimaverlust, Fairness innerhalb der Gruppe, Verhalten der anderen Spieler).
+4. **Zusatzfragen zum Klimaabkommen (nur in Variante 2 `WITH_CONTRACTS`):**
+   * *Was hat deine Entscheidung beeinflusst, dem Abkommen beizutreten oder nicht beizutreten?*
+   * *Wie hat das Abkommen dein Vertrauen in die Gruppe beeinflusst?*
+   * *Wie bewertest du die Austrittsgebühr?*
+   * *Welchen Einfluss hatte die Möglichkeit, das Abkommen per Abstimmung abzuschaffen?*
+5. **Demografie & Auszahlung:**
+   * **Alter** (Pflichtfeld)
+   * **Geschlecht:** `Mann` oder `Frau` (Pflichtfeld)
+   * **Handynummer für Twint:** Optional für die Gewinnauszahlung.
 
-**4.1 Pausen-Verhalten (Freeze-State)**
-* Löst der Admin die Pause aus, legt sich bei allen aktiven Spielern sofort ein blockierendes Fullscreen-Overlay ("Spiel pausiert durch Admin") über das Interface.
-* Der serverseitige Runden-Timer wird exakt an der aktuellen Millisekunde eingefroren.
-* Bei Aufhebung der Pause durch den Admin verschwindet das Overlay und der Timer läuft nahtlos weiter.
+### 4.3 Sofortige Ergebnisanzeige (`EndgamePage`)
+Unmittelbar nach dem Absenden des Fragebogens (`POST /api/game/survey`) sieht der Spieler automatisch seinen individuellen Ergebnis-Screen mit:
+* Gesamtsumme im Klimakonto vs. benötigtes Klimaziel (`12 Fr.`),
+* Ausgang des Risiko-Entscheids (Ziel erreicht / Katastrophe eingetreten / Glück gehabt),
+* Persönlicher Endauszahlung in `Fr.`,
+* Vollständiger Runden-Historie aller 10 Runden.
 
-**4.2 Reconnects & Session-Recovery**
-* Das System speichert die Session-Zugehörigkeit (Spielcode) und die zugewiesene Spielernummer (1 bis 6) persistent in einem lokalen Browser-Cookie.
-* Schließt ein Spieler den Tab oder verliert die Verbindung, ruft er die URL erneut auf. Das System liest das Cookie aus, umgeht die Startseite und lädt direkt den korrekten UI-State der aktuellen Runde für diesen spezifischen Slot neu.
+---
 
-**4.3 Datenexport (BMA-Auswertung)**
-* Das Admin-Dashboard bietet pro abgeschlossener Session einen "Download CSV"-Button.
-* Die exportierte Datei enthält eine tabellarische Aufschlüsselung aller 10 Runden: Spielernummer, getätigtes Investment pro Runde, das gespielte Risiko-Treatment, Angabe ob das Ziel erreicht wurde sowie das finale Auszahlungsguthaben.
+## 5. Benutzeroberfläche & Design-System
 
-## 5. Netzwerk & Infrastruktur
-Um in restriktiven Schulnetzwerken fehlerfrei zu funktionieren und den Datenschutz zu garantieren:
+### 5.1 Farbpalette & Geometrie
+Das UI folgt einem klaren, kantigen ("boxy", minimale Rundungen von `2px`–`4px`) Editorial-Design auf Basis von vier Hauptfarben:
+* `#F5EBDD` – **Warm Cream** (Seitenhintergrund)
+* `#F2765E` – **Terracotta / Coral** (Primäre Aktionsfarbe, Akzente, leicht roter Hintergrund `#FCE8E4` für die aktuelle Aktionskarte)
+* `#315B8C` – **Steel Blue** (Sekundärfarbe, Badges, Fokus-Ringe, Tabellen-Hervorhebungen)
+* `#413333` – **Dark Espresso** (Typografie, Rahmenlinien, Header)
 
-* **5.1 Kommunikation (Polling):** Das System verwendet robustes HTTP-Polling (oder Long-Polling), um den Timer und den Runden-State zwischen Server und Clients zu synchronisieren.
-* **5.2 Deployment (Docker Compose):** Die gesamte Anwendung (Frontend, Backend, Minimal-Datenbank) wird containerisiert und lässt sich auf einem lokalen Rechner/Server mit einem einzigen Befehl (`docker-compose up`) starten.
-* **5.3 Datenschutz (Zero-Tracking):** Es dürfen keinerlei externe Analyse-Tools (Analytics, Sentry etc.) oder externe CDNs eingebunden werden. Sämtliche Daten verbleiben lokal.
+### 5.2 Aufbau der Spieler-Ansicht (`GamePage`)
+* **Header:** Raumname, eigenes Pseudonym, aktuelle Runde (`X / 10`), Klimaziel (`12 Fr.`) und persönliches Restguthaben in `Fr.`.
+* **Linke Hauptspalte (von oben nach unten):**
+  1. **Aktuelle Aktions-Card (leicht roter Hintergrund `#FCE8E4`):** Je nach Phase entweder Beitrittsentscheidung zum Klimaabkommen, Vertragsprüfung/Abstimmung zwischen den Runden oder Beitrag für das Klimakonto (`0 Fr.`, `0.2 Fr.`, `0.4 Fr.`). Eine kompakte rote Hinweisbox zeigt den aktuellen eigenen Abkommensstatus (mit 10-Sekunden-Info-Toast nach einer abgeschlossenen Abstimmung).
+  2. **Rückblick letzte Runde (`HistoryTable`):** Zeigt ab Runde 2 die Einzelbeiträge und die Rundensumme der jeweils letzten abgeschlossenen Runde.
+  3. **Status der Gruppe (`PlayerStatusList`):** Unterste Card mit den 6 anonymisierten Spielern, ihrem Abkommens-Badge (`📜 Im Abkommen` / `Ausgetreten`) und ihrem aktuellen Entscheidungsstatus (`Entschieden` / `Überlegt...`).
+* **Rechte Seitenspalte:** Privater, lokal gespeicherter **Notizblock** (`LocalNotepad`) für eigene Berechnungen.
 
-## 6. Das Milinski-Endgame (Resolution)
-Nach Ablauf der 10. Runde berechnet der Server das Resultat und zeigt einen statischen Endbildschirm an.
-
-* **Szenario A (Ziel erreicht):** Text bestätigt den Erfolg. Das persönliche Restguthaben wird zur Auszahlung angezeigt.
-* **Szenario B (Ziel verfehlt - Risiko-Wurf):** Der Server berechnet basierend auf dem eingestellten Treatment ein Zufallsergebnis.
-  * *Risiko tritt NICHT ein:* Spieler behalten ihr Restguthaben. Text: "Ziel verfehlt. Sie hatten Glück: Ihr Restguthaben bleibt erhalten."
-  * *Risiko tritt ein:* Das Restguthaben wird serverseitig auf 0 gesetzt. Text: "Ziel verfehlt. Ihr Geld ging durch das [X]% Risiko verloren. Auszahlung: 0 Rappen."
-  * *Darstellung:* Es werden keine komplexen Animationen verwendet, das Ergebnis wird als unmissverständlicher Textblock kommuniziert.
+### 5.3 Admin-Dashboard & CSV-Export (`AdminPage`)
+* **Passwortschutz:** Zugriff über das in `application.yml` definierte Admin-Passwort (`app.admin-secret`).
+* **Session-Erstellung:** Wahl des Raumnamens und des Spielmodus (`NORMAL` oder `WITH_CONTRACTS`).
+* **Live-Steuerung:** Übersicht über alle Räume, verbundene Spieler, deren Bereitschaftsstatus in der aktuellen Runde (`✓ Hat gewählt` / `⏳ Überlegt...`), Button zum Starten des Spiels sowie Button `"Nächste Runde freigeben"` bzw. `"Experiment abschliessen"`.
+* **Vollständiger CSV-Export (`export.csv`):** Exportiert pro Session eine Excel-kompatible CSV-Datei (UTF-8 mit BOM) mit allen Spielerdaten, Rundenbeiträgen (`round_1_chf` bis `round_10_chf`), Vertragsstatus (`ever_joined_contract`, `left_contract`, `in_contract_at_end`), Endergebnis sowie sämtlichen Antworten aus dem Abschluss-Fragebogen.
