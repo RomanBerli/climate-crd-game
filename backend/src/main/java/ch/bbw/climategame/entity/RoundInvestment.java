@@ -48,6 +48,9 @@ public class RoundInvestment {
     @Column(name = "is_auto_bet", nullable = false)
     private boolean isAutoBet = false;
 
+    @Column(name = "currently_in_contract", nullable = false, columnDefinition = "boolean default false")
+    private boolean currentlyInContract = false;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -112,6 +115,14 @@ public class RoundInvestment {
 
     public void setAutoBet(boolean autoBet) {
         isAutoBet = autoBet;
+    }
+
+    public boolean isCurrentlyInContract() {
+        return currentlyInContract;
+    }
+
+    public void setCurrentlyInContract(boolean currentlyInContract) {
+        this.currentlyInContract = currentlyInContract;
     }
 
     public Instant getCreatedAt() {

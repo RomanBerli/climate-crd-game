@@ -49,6 +49,9 @@ public class GameSession {
     @Column(name = "contract_abolished", nullable = false)
     private boolean contractAbolished = false;
 
+    @Column(name = "contract_abolished_at_round")
+    private Integer contractAbolishedAtRound;
+
     @Column(name = "vote_initiated_round")
     private Integer voteInitiatedRound;
 
@@ -159,6 +162,14 @@ public class GameSession {
 
     public void setContractAbolished(boolean contractAbolished) {
         this.contractAbolished = contractAbolished;
+    }
+
+    public Integer getContractAbolishedAtRound() {
+        return contractAbolishedAtRound;
+    }
+
+    public void setContractAbolishedAtRound(Integer contractAbolishedAtRound) {
+        this.contractAbolishedAtRound = contractAbolishedAtRound;
     }
 
     public Integer getVoteInitiatedRound() {

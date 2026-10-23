@@ -460,7 +460,7 @@ export const SurveyPage: React.FC<SurveyPageProps> = ({
             <div className="survey-question">
               <span className="survey-question__title">5. Geschlecht</span>
               <div className="survey-radio-inline">
-                {['Mann', 'Frau'].map((g) => (
+                {['Mann', 'Frau', 'Keine Angabe'].map((g) => (
                   <label
                     key={g}
                     className={`survey-radio-item ${

@@ -195,14 +195,41 @@ class ClimateGameIntegrationTest {
         AdminSessionResponse surveyReadyState = adminService.getSession(created.id());
         assertThat(surveyReadyState.readyPlayersCount()).isEqualTo(6);
 
-        // Check CSV export includes survey columns and answers
-        String csv = adminService.exportSessionCsv(created.id());
-        String[] lines = csv.trim().split("\n");
+        // 1. Check All-in-one CSV export (anonymized without phone number)
+        String allCsv = adminService.exportSessionCsv(created.id(), "all");
+        String[] allLines = allCsv.trim().split("\n");
         // 1 header + 60 investment rows (10 rounds * 6 players)
-        assertThat(lines).hasSize(61);
-        assertThat(lines[0]).contains("survey_expected_probability_pct,survey_reaction_unfairness,survey_motivation_ranking");
-        assertThat(csv).contains("079 999 88 77");
-        assertThat(csv).contains("Frau");
+        assertThat(allLines).hasSize(61);
+        assertThat(allLines[0]).contains("survey_expected_probability_pct,survey_reaction_unfairness,survey_motivation_ranking");
+        assertThat(allCsv).doesNotContain("079 999 88 77");
+        assertThat(allCsv).contains("Frau");
+
+        // 2. Check RoundInfo CSV (6 player rows)
+        String roundInfoCsv = adminService.exportSessionCsv(created.id(), "round_info");
+        String[] roundInfoLines = roundInfoCsv.trim().split("\n");
+        assertThat(roundInfoLines).hasSize(7);
+        assertThat(roundInfoLines[0]).contains("session_code,game_mode,target_sum_rappen,total_invested_rappen,target_reached,risk_occurred,player_number,player_total_invested_rappen,balance_before_risk_rappen,final_payout_rappen,final_payout_chf,ever_joined_contract,left_contract,in_contract_at_end,left_contract_at_round,contract_abolished,contract_abolished_at_round");
+
+        // 3. Check Invest CSV (60 investment rows)
+        String investCsv = adminService.exportSessionCsv(created.id(), "invest");
+        String[] investLines = investCsv.trim().split("\n");
+        assertThat(investLines).hasSize(61);
+        assertThat(investLines[0]).contains("session_code,round,player_number,invested_rappen,invested_chf,submitted_at,currently_in_contract");
+
+        // 4. Check Survey CSV (6 player rows, without phone number)
+        String surveyCsv = adminService.exportSessionCsv(created.id(), "survey");
+        String[] surveyLines = surveyCsv.trim().split("\n");
+        assertThat(surveyLines).hasSize(7);
+        assertThat(surveyCsv).doesNotContain("079 999 88 77");
+        assertThat(surveyCsv).contains("Frau");
+
+        // 5. Check Auszahlung / Payout CSV (6 player rows, WITH phone number & CHF)
+        String payoutCsv = adminService.exportSessionCsv(created.id(), "payout");
+        String[] payoutLines = payoutCsv.trim().split("\n");
+        assertThat(payoutLines).hasSize(7);
+        assertThat(payoutLines[0]).contains("session_code,player_number,final_payout_rappen,final_payout_chf,survey_twint_number");
+        assertThat(payoutCsv).contains("079 999 88 77");
+        assertThat(payoutCsv).contains("2.00");
     }
 
     @Test
@@ -296,5 +323,19 @@ class ClimateGameIntegrationTest {
 
         // Now former members can invest 0 Rappen without paying any exit fee
         gameEngineService.submitInvestment(players.get(1).sessionToken(), 0);
+
+        // Verify RoundInfo CSV tracks left_contract_at_round (2 for Player 1), contract_abolished_at_round (3), and exit fee balances
+        String roundInfoCsv = adminService.exportSessionCsv(created.id(), "round_info");
+        String[] roundInfoLines = roundInfoCsv.trim().split("\n");
+        // Line 1 is Player 1: invested 20 total, balance 320, left_contract=true, left_contract_at_round=2, contract_abolished=true, contract_abolished_at_round=3
+        assertThat(roundInfoLines[1]).contains(",1,20,320,320,3.20,true,true,false,2,true,3");
+        // Line 2 is Player 2: invested 40 total (20 in R1, 20 in R2, 0 in R3), received 20 exit fee -> balance 380
+        assertThat(roundInfoLines[2]).contains(",2,40,380,380,3.80,true,false,false,,true,3");
+
+        // Verify Invest CSV tracks currently_in_contract per round
+        String investCsv = adminService.exportSessionCsv(created.id(), "invest");
+        // In Round 1, Player 1 was in contract (true); in Round 2, Player 1 was no longer in contract (false)
+        assertThat(investCsv).contains(",1,1,20,0.20,");
+        assertThat(investCsv).contains(",2,1,0,0.00,");
     }
 }

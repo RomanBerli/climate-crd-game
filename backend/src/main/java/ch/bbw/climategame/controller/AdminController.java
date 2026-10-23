@@ -13,10 +13,12 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 /**
@@ -63,10 +65,14 @@ public class AdminController {
     }
 
     @GetMapping(value = "/sessions/{id}/export.csv", produces = "text/csv;charset=UTF-8")
-    public ResponseEntity<byte[]> exportSessionCsv(@PathVariable UUID id) {
+    public ResponseEntity<byte[]> exportSessionCsv(
+            @PathVariable UUID id,
+            @RequestParam(name = "type", defaultValue = "all") String type
+    ) {
         AdminSessionResponse session = adminService.getSession(id);
-        String csvContent = adminService.exportSessionCsv(id);
-        String filename = "milinski_session_" + session.code() + ".csv";
+        String normalizedType = type == null ? "all" : type.trim().toLowerCase(Locale.ROOT);
+        String csvContent = adminService.exportSessionCsv(id, normalizedType);
+        String filename = "milinski_session_" + session.code() + "_" + normalizedType + ".csv";
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")

@@ -324,6 +324,7 @@ public class GameEngineService {
                 tokenPlayer.setCurrentBalanceRappen(tokenPlayer.getCurrentBalanceRappen() - totalFeeRappen);
                 tokenPlayer.setInContract(false);
                 tokenPlayer.setLeftContract(true);
+                tokenPlayer.setLeftContractAtRound(currentRound);
                 tokenPlayer.setContractReviewDecidedRound(currentRound);
 
                 for (Player member : remainingMembers) {
@@ -442,6 +443,7 @@ public class GameEngineService {
         if (yesVotes * 2 > totalMembers) {
             session.setContractActive(false);
             session.setContractAbolished(true);
+            session.setContractAbolishedAtRound(currentRound);
             for (Player member : members) {
                 member.setInContract(false);
             }
@@ -647,6 +649,7 @@ public class GameEngineService {
         investment.setPlayerNumber(player.getPlayerNumber());
         investment.setAmountRappen(amountRappen);
         investment.setAutoBet(false);
+        investment.setCurrentlyInContract(player.isInContract());
         investmentRepository.save(investment);
 
         player.setCurrentBalanceRappen(player.getCurrentBalanceRappen() - amountRappen);

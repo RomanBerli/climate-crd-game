@@ -154,8 +154,157 @@ public class AdminService {
 
     @Transactional(readOnly = true)
     public String exportSessionCsv(UUID sessionId) {
-        GameSession session = sessionRepository.findById(sessionId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session nicht gefunden."));
+        return exportSessionCsv(sessionId, "all");
+    }
+
+    @Transactional(readOnly = true)
+    public String exportSessionCsv(UUID sessionId, String rawType) {
+        String type = rawType == null ? "all" : rawType.trim().toLowerCase(Locale.ROOT);
+        return switch (type) {
+            case "round_info", "roundinfo" -> exportRoundInfoCsv(sessionId);
+            case "invest" -> exportInvestCsv(sessionId);
+            case "survey" -> exportSurveyCsv(sessionId);
+            case "payout", "auszahlung" -> exportPayoutCsv(sessionId);
+            case "all" -> exportAllCombinedCsv(sessionId);
+            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unbekannter CSV-Export-Typ: " + rawType);
+        };
+    }
+
+    @Transactional(readOnly = true)
+    public String exportRoundInfoCsv(UUID sessionId) {
+        GameSession session = findSessionOrThrow(sessionId);
+        List<Player> players = playerRepository.findBySessionIdOrderByPlayerNumberAsc(session.getId());
+        List<RoundInvestment> investments = investmentRepository
+                .findBySessionIdOrderByRoundNumberAscPlayerNumberAsc(session.getId());
+
+        Map<Integer, Integer> totalInvestedByPlayer = investments.stream()
+                .collect(Collectors.groupingBy(
+                        RoundInvestment::getPlayerNumber,
+                        Collectors.summingInt(RoundInvestment::getAmountRappen)
+                ));
+
+        StringBuilder sb = new StringBuilder();
+        sb.append('\uFEFF');
+        sb.append("session_code,game_mode,target_sum_rappen,total_invested_rappen,target_reached,risk_occurred,player_number,player_total_invested_rappen,balance_before_risk_rappen,final_payout_rappen,final_payout_chf,ever_joined_contract,left_contract,in_contract_at_end,left_contract_at_round,contract_abolished,contract_abolished_at_round\n");
+
+        for (Player p : players) {
+            int playerTotalInvested = totalInvestedByPlayer.getOrDefault(p.getPlayerNumber(), 0);
+            int balanceBeforeRisk = p.getCurrentBalanceRappen();
+            int finalPayoutRappen = p.getFinalPayoutRappen() != null ? p.getFinalPayoutRappen() : balanceBeforeRisk;
+            String finalPayoutChf = String.format(Locale.US, "%.2f", finalPayoutRappen / 100.0);
+
+            sb.append(csvEscape(session.getCode())).append(',')
+                    .append(csvEscape(session.getGameMode().name())).append(',')
+                    .append(session.getTargetSumRappen()).append(',')
+                    .append(session.getTotalPotRappen()).append(',')
+                    .append(session.getIsGoalReached() != null ? session.getIsGoalReached() : false).append(',')
+                    .append(session.getRiskOccurred() != null ? session.getRiskOccurred() : false).append(',')
+                    .append(p.getPlayerNumber()).append(',')
+                    .append(playerTotalInvested).append(',')
+                    .append(balanceBeforeRisk).append(',')
+                    .append(finalPayoutRappen).append(',')
+                    .append(finalPayoutChf).append(',')
+                    .append(p.isEverJoinedContract()).append(',')
+                    .append(p.isLeftContract()).append(',')
+                    .append(p.isInContract()).append(',')
+                    .append(p.getLeftContractAtRound() != null ? p.getLeftContractAtRound() : "").append(',')
+                    .append(session.isContractAbolished()).append(',')
+                    .append(session.getContractAbolishedAtRound() != null ? session.getContractAbolishedAtRound() : "")
+                    .append('\n');
+        }
+
+        return sb.toString();
+    }
+
+    @Transactional(readOnly = true)
+    public String exportInvestCsv(UUID sessionId) {
+        GameSession session = findSessionOrThrow(sessionId);
+        List<RoundInvestment> investments = investmentRepository
+                .findBySessionIdOrderByRoundNumberAscPlayerNumberAsc(session.getId());
+
+        StringBuilder sb = new StringBuilder();
+        sb.append('\uFEFF');
+        sb.append("session_code,round,player_number,invested_rappen,invested_chf,submitted_at,currently_in_contract\n");
+
+        for (RoundInvestment inv : investments) {
+            String investedChf = String.format(Locale.US, "%.2f", inv.getAmountRappen() / 100.0);
+            sb.append(csvEscape(session.getCode())).append(',')
+                    .append(inv.getRoundNumber()).append(',')
+                    .append(inv.getPlayerNumber()).append(',')
+                    .append(inv.getAmountRappen()).append(',')
+                    .append(investedChf).append(',')
+                    .append(csvEscape(inv.getCreatedAt() != null ? inv.getCreatedAt().toString() : "")).append(',')
+                    .append(inv.isCurrentlyInContract())
+                    .append('\n');
+        }
+
+        return sb.toString();
+    }
+
+    @Transactional(readOnly = true)
+    public String exportSurveyCsv(UUID sessionId) {
+        GameSession session = findSessionOrThrow(sessionId);
+        List<Player> players = playerRepository.findBySessionIdOrderByPlayerNumberAsc(session.getId());
+        Map<Integer, PlayerSurvey> surveyByNumber = surveyRepository
+                .findBySessionIdOrderByPlayerNumberAsc(session.getId())
+                .stream()
+                .collect(Collectors.toMap(PlayerSurvey::getPlayerNumber, s -> s, (a, b) -> a));
+
+        StringBuilder sb = new StringBuilder();
+        sb.append('\uFEFF');
+        sb.append("session_code,player_number,survey_expected_probability_pct,survey_reaction_unfairness,survey_motivation_ranking,survey_contract_joined_reason,survey_contract_not_joined_reason,survey_contract_left_reason,survey_contract_stayed_reason,survey_age,survey_gender\n");
+
+        for (Player p : players) {
+            PlayerSurvey survey = surveyByNumber.get(p.getPlayerNumber());
+            sb.append(csvEscape(session.getCode())).append(',')
+                    .append(p.getPlayerNumber()).append(',')
+                    .append(survey != null ? survey.getExpectedProbabilityPct() : "").append(',')
+                    .append(csvEscape(survey != null ? survey.getReactionToUnfairness() : "")).append(',')
+                    .append(csvEscape(survey != null ? survey.getMotivationRanking() : "")).append(',')
+                    .append(csvEscape(survey != null ? survey.getContractJoinedReason() : "")).append(',')
+                    .append(csvEscape(survey != null ? survey.getContractNotJoinedReason() : "")).append(',')
+                    .append(csvEscape(survey != null ? survey.getContractLeftReason() : "")).append(',')
+                    .append(csvEscape(survey != null ? survey.getContractStayedReason() : "")).append(',')
+                    .append(survey != null ? survey.getAge() : "").append(',')
+                    .append(csvEscape(survey != null ? survey.getGender() : ""))
+                    .append('\n');
+        }
+
+        return sb.toString();
+    }
+
+    @Transactional(readOnly = true)
+    public String exportPayoutCsv(UUID sessionId) {
+        GameSession session = findSessionOrThrow(sessionId);
+        List<Player> players = playerRepository.findBySessionIdOrderByPlayerNumberAsc(session.getId());
+        Map<Integer, PlayerSurvey> surveyByNumber = surveyRepository
+                .findBySessionIdOrderByPlayerNumberAsc(session.getId())
+                .stream()
+                .collect(Collectors.toMap(PlayerSurvey::getPlayerNumber, s -> s, (a, b) -> a));
+
+        StringBuilder sb = new StringBuilder();
+        sb.append('\uFEFF');
+        sb.append("session_code,player_number,final_payout_rappen,final_payout_chf,survey_twint_number\n");
+
+        for (Player p : players) {
+            PlayerSurvey survey = surveyByNumber.get(p.getPlayerNumber());
+            int finalPayoutRappen = p.getFinalPayoutRappen() != null ? p.getFinalPayoutRappen() : p.getCurrentBalanceRappen();
+            String finalPayoutChf = String.format(Locale.US, "%.2f", finalPayoutRappen / 100.0);
+
+            sb.append(csvEscape(session.getCode())).append(',')
+                    .append(p.getPlayerNumber()).append(',')
+                    .append(finalPayoutRappen).append(',')
+                    .append(finalPayoutChf).append(',')
+                    .append(csvEscape(survey != null ? survey.getTwintPhone() : ""))
+                    .append('\n');
+        }
+
+        return sb.toString();
+    }
+
+    @Transactional(readOnly = true)
+    public String exportAllCombinedCsv(UUID sessionId) {
+        GameSession session = findSessionOrThrow(sessionId);
 
         List<Player> players = playerRepository.findBySessionIdOrderByPlayerNumberAsc(session.getId());
         Map<Integer, Player> playerByNumber = players.stream()
@@ -169,25 +318,31 @@ public class AdminService {
         List<RoundInvestment> investments = investmentRepository
                 .findBySessionIdOrderByRoundNumberAscPlayerNumberAsc(session.getId());
 
+        Map<Integer, Integer> totalInvestedByPlayer = investments.stream()
+                .collect(Collectors.groupingBy(
+                        RoundInvestment::getPlayerNumber,
+                        Collectors.summingInt(RoundInvestment::getAmountRappen)
+                ));
+
         StringBuilder sb = new StringBuilder();
         // UTF-8 BOM für korrekte Umlaute in Microsoft Excel
         sb.append('\uFEFF');
-        sb.append("session_id,session_code,game_mode,risk_treatment,target_sum_rappen,total_invested_rappen,target_reached,risk_occurred,round,player_number,invested_rappen,invested_chf,is_auto_bet,submitted_at,final_payout_rappen,final_payout_chf,ever_joined_contract,left_contract,in_contract_at_end,survey_expected_probability_pct,survey_reaction_unfairness,survey_motivation_ranking,survey_contract_joined_reason,survey_contract_not_joined_reason,survey_contract_left_reason,survey_contract_stayed_reason,survey_age,survey_gender,survey_twint_phone\n");
+        sb.append("session_code,game_mode,target_sum_rappen,total_invested_rappen,target_reached,risk_occurred,round,player_number,invested_rappen,invested_chf,submitted_at,currently_in_contract,player_total_invested_rappen,balance_before_risk_rappen,final_payout_rappen,final_payout_chf,ever_joined_contract,left_contract,in_contract_at_end,left_contract_at_round,contract_abolished,contract_abolished_at_round,survey_expected_probability_pct,survey_reaction_unfairness,survey_motivation_ranking,survey_contract_joined_reason,survey_contract_not_joined_reason,survey_contract_left_reason,survey_contract_stayed_reason,survey_age,survey_gender\n");
 
         for (RoundInvestment inv : investments) {
             Player p = playerByNumber.get(inv.getPlayerNumber());
             PlayerSurvey survey = surveyByNumber.get(inv.getPlayerNumber());
+            int playerTotalInvested = totalInvestedByPlayer.getOrDefault(inv.getPlayerNumber(), 0);
+            int balanceBeforeRisk = p != null ? p.getCurrentBalanceRappen() : 0;
             int finalPayoutRappen = (p != null && p.getFinalPayoutRappen() != null)
                     ? p.getFinalPayoutRappen()
-                    : (p != null ? p.getCurrentBalanceRappen() : 0);
+                    : balanceBeforeRisk;
 
             String investedChf = String.format(Locale.US, "%.2f", inv.getAmountRappen() / 100.0);
             String finalPayoutChf = String.format(Locale.US, "%.2f", finalPayoutRappen / 100.0);
 
-            sb.append(csvEscape(session.getId().toString())).append(',')
-                    .append(csvEscape(session.getCode())).append(',')
+            sb.append(csvEscape(session.getCode())).append(',')
                     .append(csvEscape(session.getGameMode().name())).append(',')
-                    .append(session.getRiskLevel().toPlainString()).append(',')
                     .append(session.getTargetSumRappen()).append(',')
                     .append(session.getTotalPotRappen()).append(',')
                     .append(session.getIsGoalReached() != null ? session.getIsGoalReached() : false).append(',')
@@ -196,13 +351,18 @@ public class AdminService {
                     .append(inv.getPlayerNumber()).append(',')
                     .append(inv.getAmountRappen()).append(',')
                     .append(investedChf).append(',')
-                    .append(inv.isAutoBet()).append(',')
                     .append(csvEscape(inv.getCreatedAt() != null ? inv.getCreatedAt().toString() : "")).append(',')
+                    .append(inv.isCurrentlyInContract()).append(',')
+                    .append(playerTotalInvested).append(',')
+                    .append(balanceBeforeRisk).append(',')
                     .append(finalPayoutRappen).append(',')
                     .append(finalPayoutChf).append(',')
                     .append(p != null && p.isEverJoinedContract()).append(',')
                     .append(p != null && p.isLeftContract()).append(',')
                     .append(p != null && p.isInContract()).append(',')
+                    .append(p != null && p.getLeftContractAtRound() != null ? p.getLeftContractAtRound() : "").append(',')
+                    .append(session.isContractAbolished()).append(',')
+                    .append(session.getContractAbolishedAtRound() != null ? session.getContractAbolishedAtRound() : "").append(',')
                     .append(survey != null ? survey.getExpectedProbabilityPct() : "").append(',')
                     .append(csvEscape(survey != null ? survey.getReactionToUnfairness() : "")).append(',')
                     .append(csvEscape(survey != null ? survey.getMotivationRanking() : "")).append(',')
@@ -211,12 +371,16 @@ public class AdminService {
                     .append(csvEscape(survey != null ? survey.getContractLeftReason() : "")).append(',')
                     .append(csvEscape(survey != null ? survey.getContractStayedReason() : "")).append(',')
                     .append(survey != null ? survey.getAge() : "").append(',')
-                    .append(csvEscape(survey != null ? survey.getGender() : "")).append(',')
-                    .append(csvEscape(survey != null ? survey.getTwintPhone() : ""))
+                    .append(csvEscape(survey != null ? survey.getGender() : ""))
                     .append('\n');
         }
 
         return sb.toString();
+    }
+
+    private GameSession findSessionOrThrow(UUID sessionId) {
+        return sessionRepository.findById(sessionId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session nicht gefunden."));
     }
 
     private String csvEscape(String value) {

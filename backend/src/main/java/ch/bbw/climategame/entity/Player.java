@@ -57,6 +57,9 @@ public class Player {
     @Column(name = "left_contract", nullable = false)
     private boolean leftContract = false;
 
+    @Column(name = "left_contract_at_round")
+    private Integer leftContractAtRound;
+
     @Column(name = "contract_join_decided", nullable = false)
     private boolean contractJoinDecided = false;
 
@@ -157,6 +160,14 @@ public class Player {
 
     public void setLeftContract(boolean leftContract) {
         this.leftContract = leftContract;
+    }
+
+    public Integer getLeftContractAtRound() {
+        return leftContractAtRound;
+    }
+
+    public void setLeftContractAtRound(Integer leftContractAtRound) {
+        this.leftContractAtRound = leftContractAtRound;
     }
 
     public boolean isContractJoinDecided() {
