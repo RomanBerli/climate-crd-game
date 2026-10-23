@@ -670,8 +670,28 @@ public class GameEngineService {
         }
 
         int lastCompletedRound = session.getCurrentRound() - 1;
+        return List.of(buildSingleRoundHistoryDto(lastCompletedRound, allInvestments, groupSize));
+    }
+
+    public List<RoundHistoryDto> buildFullRoundHistory(
+            List<RoundInvestment> allInvestments,
+            int groupSize,
+            int maxRounds
+    ) {
+        List<RoundHistoryDto> fullHistory = new ArrayList<>();
+        for (int round = 1; round <= maxRounds; round++) {
+            fullHistory.add(buildSingleRoundHistoryDto(round, allInvestments, groupSize));
+        }
+        return fullHistory;
+    }
+
+    private RoundHistoryDto buildSingleRoundHistoryDto(
+            int roundNumber,
+            List<RoundInvestment> allInvestments,
+            int groupSize
+    ) {
         Map<Integer, RoundInvestment> roundMap = allInvestments.stream()
-                .filter(inv -> inv.getRoundNumber() == lastCompletedRound)
+                .filter(inv -> inv.getRoundNumber() == roundNumber)
                 .collect(Collectors.toMap(
                         RoundInvestment::getPlayerNumber,
                         inv -> inv,
@@ -688,7 +708,7 @@ public class GameEngineService {
             row.add(new RoundHistoryDto.PlayerInvestmentDto(pNum, amount, autoBet));
         }
 
-        return List.of(new RoundHistoryDto(lastCompletedRound, roundTotalRappen, row));
+        return new RoundHistoryDto(roundNumber, roundTotalRappen, row);
     }
 
     private GameStateResponse buildGameStateResponse(
@@ -794,7 +814,9 @@ public class GameEngineService {
                 session.getLastContractEvent()
         );
 
-        List<RoundHistoryDto> history = buildCompletedRoundHistory(session, allInvestments, groupSize);
+        List<RoundHistoryDto> history = (session.getStatus() == SessionStatus.FINISHED && hasSubmittedSurvey)
+                ? buildFullRoundHistory(allInvestments, groupSize, totalRounds)
+                : buildCompletedRoundHistory(session, allInvestments, groupSize);
         // Resultat erst mitliefern, sobald der Spieler seinen Fragebogen abgeschickt hat!
         EndgameResultDto endgameDto = (session.getStatus() == SessionStatus.FINISHED && hasSubmittedSurvey)
                 ? payoutService.buildEndgameResultDto(session, player)

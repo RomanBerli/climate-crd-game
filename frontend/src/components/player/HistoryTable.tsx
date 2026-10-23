@@ -18,11 +18,9 @@ export const HistoryTable: React.FC<HistoryTableProps> = ({
   history,
   myPlayerNumber,
   groupSize,
-  initialBalanceRappen = 400,
 }) => {
   const playerColumns = Array.from({ length: groupSize }, (_, i) => i + 1);
   const lastRoundEntry = history.length > 0 ? history[history.length - 1] : null;
-  const opt1 = Math.round(initialBalanceRappen * 0.05);
 
   return (
     <section className="history-card">
@@ -74,15 +72,7 @@ export const HistoryTable: React.FC<HistoryTableProps> = ({
                         pNum === myPlayerNumber ? 'history-table__col--me' : ''
                       }`}
                     >
-                      <span
-                        className={`amount-pill ${
-                          amount === 0
-                            ? 'amount-pill--0'
-                            : amount <= opt1
-                            ? 'amount-pill--20'
-                            : 'amount-pill--40'
-                        }`}
-                      >
+                      <span className="amount-pill amount-pill--20">
                         {formatFr(amount)}
                       </span>
                     </td>

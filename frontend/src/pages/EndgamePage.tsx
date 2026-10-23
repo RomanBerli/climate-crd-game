@@ -10,18 +10,26 @@ interface EndgamePageProps {
 
 /**
  * Statischer Milinski-Endbildschirm:
- * Zeigt Spielernummer, Session-Code, unmissverständlichen Ergebnis-Textblock
- * und den auszuzahlenden Endbetrag in Franken gross und deutlich an.
+ * Zeigt Spielernummer, Session-Code, unmissverständlichen Ergebnis-Textblock,
+ * den auszuzahlenden Endbetrag in Franken sowie die vollständige Tabelle aller Rundenbeiträge aller Spieler.
  */
 export const EndgamePage: React.FC<EndgamePageProps> = ({
   gameState,
   onResetSession,
 }) => {
-  const { player, sessionCode, endgame } = gameState;
+  const { player, sessionCode, endgame, history, groupSize } = gameState;
   const payoutRappen = endgame ? endgame.finalPayoutRappen : player.finalPayoutRappen ?? 0;
 
   const isSuccess = endgame?.isGoalReached === true;
   const isLuckySurvival = endgame?.isGoalReached === false && endgame?.riskOccurred === false;
+  const playerColumns = Array.from({ length: groupSize }, (_, i) => i + 1);
+
+  const playerTotals = playerColumns.map((pNum) =>
+    history.reduce((sum, roundRow) => {
+      const inv = roundRow.investments.find((entry) => entry.playerNumber === pNum);
+      return sum + (inv ? inv.amountRappen : 0);
+    }, 0)
+  );
 
   const handleNewSession = async () => {
     await leaveLobby();
@@ -79,6 +87,79 @@ export const EndgamePage: React.FC<EndgamePageProps> = ({
             <span>Restguthaben vor Risiko-Prüfung: {formatFr(player.currentBalanceRappen)}</span>
           </div>
         </div>
+
+        {history.length > 0 && (
+          <div className="history-card" style={{ boxShadow: 'none' }}>
+            <div className="history-card__header">
+              <h3 className="section-title">Alle Einzahlungen aller Spieler (Runde 1 – {history.length})</h3>
+            </div>
+            <div className="history-table-wrapper">
+              <table className="history-table">
+                <thead>
+                  <tr>
+                    <th>Runde</th>
+                    {playerColumns.map((pNum) => (
+                      <th
+                        key={pNum}
+                        className={pNum === player.playerNumber ? 'history-table__col--me' : ''}
+                      >
+                        Spieler {pNum}
+                        {pNum === player.playerNumber ? ' (Sie)' : ''}
+                      </th>
+                    ))}
+                    <th>Runden-Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {history.map((roundEntry) => (
+                    <tr key={roundEntry.round}>
+                      <td className="history-table__round">Runde {roundEntry.round}</td>
+                      {playerColumns.map((pNum) => {
+                        const entry = roundEntry.investments.find(
+                          (inv) => inv.playerNumber === pNum
+                        );
+                        const amount = entry ? entry.amountRappen : 0;
+                        return (
+                          <td
+                            key={pNum}
+                            className={`history-table__cell ${
+                              pNum === player.playerNumber ? 'history-table__col--me' : ''
+                            }`}
+                          >
+                            <span className="amount-pill amount-pill--20">
+                              {formatFr(amount)}
+                            </span>
+                          </td>
+                        );
+                      })}
+                      <td className="history-table__round">
+                        <strong>+{formatFr(roundEntry.roundTotalRappen)}</strong>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr style={{ borderTop: '2px solid var(--border-strong)', background: 'var(--bg-card-elevated)' }}>
+                    <td className="history-table__round">Gesamt</td>
+                    {playerColumns.map((pNum, idx) => (
+                      <td
+                        key={pNum}
+                        className={`history-table__cell ${
+                          pNum === player.playerNumber ? 'history-table__col--me' : ''
+                        }`}
+                      >
+                        <strong>{formatFr(playerTotals[idx])}</strong>
+                      </td>
+                    ))}
+                    <td className="history-table__round">
+                      <strong>{formatFr(gameState.totalPotRappen)}</strong>
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        )}
 
         <div className="endgame-card__footer">
           <button type="button" className="btn btn--ghost" onClick={handleNewSession}>

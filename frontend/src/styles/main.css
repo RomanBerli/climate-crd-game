@@ -984,22 +984,12 @@ body {
   border: 1px solid transparent;
 }
 
-.amount-pill--0 {
-  background: var(--bg-input);
-  color: var(--text-muted);
-  border-color: var(--border-subtle);
-}
-
-.amount-pill--20 {
+.amount-pill--0,
+.amount-pill--20,
+.amount-pill--40 {
   background: rgba(49, 91, 140, 0.14);
   color: var(--color-blue);
   border-color: rgba(49, 91, 140, 0.4);
-}
-
-.amount-pill--40 {
-  background: rgba(242, 118, 94, 0.2);
-  color: var(--color-espresso);
-  border-color: var(--color-coral);
 }
 
 /* Local Notepad */

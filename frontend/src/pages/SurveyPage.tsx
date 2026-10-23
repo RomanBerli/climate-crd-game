@@ -68,12 +68,18 @@ export const SurveyPage: React.FC<SurveyPageProps> = ({
   const { player, sessionCode, gameMode } = gameState;
   const isContractsMode = gameMode === 'WITH_CONTRACTS';
 
+  // Nur die Abkommen-Fragen einblenden, die auf das tatsächliche Verhalten des Spielers zutreffen
+  const showJoinedQuestion = isContractsMode && player.everJoinedContract;
+  const showNotJoinedQuestion = isContractsMode && !player.everJoinedContract;
+  const showLeftQuestion = isContractsMode && player.everJoinedContract && player.leftContract;
+  const showStayedQuestion = isContractsMode && player.everJoinedContract && !player.leftContract;
+
   const [expectedProb, setExpectedProb] = useState<number>(50);
   const [reactionToUnfairness, setReactionToUnfairness] = useState<string>('');
   const [motivationRanking, setMotivationRanking] = useState<string[]>(INITIAL_MOTIVATION_ITEMS);
   const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
 
-  // Abkommen-Fragen (nur im Modus WITH_CONTRACTS sichtbar)
+  // Abkommen-Fragen
   const [contractJoinedChoice, setContractJoinedChoice] = useState<string>('');
   const [contractJoinedOther, setContractJoinedOther] = useState<string>('');
 
@@ -155,16 +161,16 @@ export const SurveyPage: React.FC<SurveyPageProps> = ({
         expectedProbabilityPct: expectedProb,
         reactionToUnfairness,
         motivationRanking,
-        contractJoinedReason: isContractsMode
+        contractJoinedReason: showJoinedQuestion
           ? resolveOptionValue(contractJoinedChoice, contractJoinedOther)
           : null,
-        contractNotJoinedReason: isContractsMode
+        contractNotJoinedReason: showNotJoinedQuestion
           ? resolveOptionValue(contractNotJoinedChoice, contractNotJoinedOther)
           : null,
-        contractLeftReason: isContractsMode
+        contractLeftReason: showLeftQuestion
           ? resolveOptionValue(contractLeftChoice, contractLeftOther)
           : null,
-        contractStayedReason: isContractsMode
+        contractStayedReason: showStayedQuestion
           ? resolveOptionValue(contractStayedChoice, contractStayedOther)
           : null,
         age: parsedAge,
@@ -297,145 +303,149 @@ export const SurveyPage: React.FC<SurveyPageProps> = ({
             </div>
           </div>
 
-          {/* Abkommen-Fragen: Nur im Modus 'WITH_CONTRACTS' */}
-          {isContractsMode && (
-            <>
-              <div className="survey-question">
-                <span className="survey-question__title">
-                  Falls dem Abkommen beigetreten: Was war der wichtigste Grund, warum du dem Abkommen beigetreten bist?
-                </span>
-                <div className="survey-radio-list">
-                  {CONTRACT_JOINED_OPTIONS.map((option) => (
-                    <label
-                      key={option}
-                      className={`survey-radio-item ${
-                        contractJoinedChoice === option ? 'survey-radio-item--selected' : ''
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="contractJoined"
-                        value={option}
-                        checked={contractJoinedChoice === option}
-                        onChange={() => setContractJoinedChoice(option)}
-                      />
-                      <span>{option === 'OTHER' ? 'Anderer Grund:' : option}</span>
-                    </label>
-                  ))}
-                  {contractJoinedChoice === 'OTHER' && (
+          {/* Abkommen-Fragen: Nur die für diesen Spieler zutreffenden Fragen anzeigen */}
+          {showJoinedQuestion && (
+            <div className="survey-question">
+              <span className="survey-question__title">
+                Was war der wichtigste Grund, warum du dem Abkommen beigetreten bist?
+              </span>
+              <div className="survey-radio-list">
+                {CONTRACT_JOINED_OPTIONS.map((option) => (
+                  <label
+                    key={option}
+                    className={`survey-radio-item ${
+                      contractJoinedChoice === option ? 'survey-radio-item--selected' : ''
+                    }`}
+                  >
                     <input
-                      type="text"
-                      className="survey-text-input"
-                      placeholder="Bitte Grund angeben..."
-                      value={contractJoinedOther}
-                      onChange={(e) => setContractJoinedOther(e.target.value)}
+                      type="radio"
+                      name="contractJoined"
+                      value={option}
+                      checked={contractJoinedChoice === option}
+                      onChange={() => setContractJoinedChoice(option)}
                     />
-                  )}
-                </div>
+                    <span>{option === 'OTHER' ? 'Anderer Grund:' : option}</span>
+                  </label>
+                ))}
+                {contractJoinedChoice === 'OTHER' && (
+                  <input
+                    type="text"
+                    className="survey-text-input"
+                    placeholder="Bitte Grund angeben..."
+                    value={contractJoinedOther}
+                    onChange={(e) => setContractJoinedOther(e.target.value)}
+                  />
+                )}
               </div>
+            </div>
+          )}
 
-              <div className="survey-question">
-                <span className="survey-question__title">
-                  Falls nicht beigetreten: Was war der wichtigste Grund, warum du dem Abkommen nicht beigetreten bist?
-                </span>
-                <div className="survey-radio-list">
-                  {CONTRACT_NOT_JOINED_OPTIONS.map((option) => (
-                    <label
-                      key={option}
-                      className={`survey-radio-item ${
-                        contractNotJoinedChoice === option ? 'survey-radio-item--selected' : ''
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="contractNotJoined"
-                        value={option}
-                        checked={contractNotJoinedChoice === option}
-                        onChange={() => setContractNotJoinedChoice(option)}
-                      />
-                      <span>{option === 'OTHER' ? 'Anderer Grund:' : option}</span>
-                    </label>
-                  ))}
-                  {contractNotJoinedChoice === 'OTHER' && (
+          {showNotJoinedQuestion && (
+            <div className="survey-question">
+              <span className="survey-question__title">
+                Was war der wichtigste Grund, warum du dem Abkommen nicht beigetreten bist?
+              </span>
+              <div className="survey-radio-list">
+                {CONTRACT_NOT_JOINED_OPTIONS.map((option) => (
+                  <label
+                    key={option}
+                    className={`survey-radio-item ${
+                      contractNotJoinedChoice === option ? 'survey-radio-item--selected' : ''
+                    }`}
+                  >
                     <input
-                      type="text"
-                      className="survey-text-input"
-                      placeholder="Bitte Grund angeben..."
-                      value={contractNotJoinedOther}
-                      onChange={(e) => setContractNotJoinedOther(e.target.value)}
+                      type="radio"
+                      name="contractNotJoined"
+                      value={option}
+                      checked={contractNotJoinedChoice === option}
+                      onChange={() => setContractNotJoinedChoice(option)}
                     />
-                  )}
-                </div>
+                    <span>{option === 'OTHER' ? 'Anderer Grund:' : option}</span>
+                  </label>
+                ))}
+                {contractNotJoinedChoice === 'OTHER' && (
+                  <input
+                    type="text"
+                    className="survey-text-input"
+                    placeholder="Bitte Grund angeben..."
+                    value={contractNotJoinedOther}
+                    onChange={(e) => setContractNotJoinedOther(e.target.value)}
+                  />
+                )}
               </div>
+            </div>
+          )}
 
-              <div className="survey-question">
-                <span className="survey-question__title">
-                  Falls ausgetreten vom Abkommen: Was war der wichtigste Grund für deinen Austritt?
-                </span>
-                <div className="survey-radio-list">
-                  {CONTRACT_LEFT_OPTIONS.map((option) => (
-                    <label
-                      key={option}
-                      className={`survey-radio-item ${
-                        contractLeftChoice === option ? 'survey-radio-item--selected' : ''
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="contractLeft"
-                        value={option}
-                        checked={contractLeftChoice === option}
-                        onChange={() => setContractLeftChoice(option)}
-                      />
-                      <span>{option === 'OTHER' ? 'Anderer Grund:' : option}</span>
-                    </label>
-                  ))}
-                  {contractLeftChoice === 'OTHER' && (
+          {showLeftQuestion && (
+            <div className="survey-question">
+              <span className="survey-question__title">
+                Was war der wichtigste Grund für deinen Austritt aus dem Abkommen?
+              </span>
+              <div className="survey-radio-list">
+                {CONTRACT_LEFT_OPTIONS.map((option) => (
+                  <label
+                    key={option}
+                    className={`survey-radio-item ${
+                      contractLeftChoice === option ? 'survey-radio-item--selected' : ''
+                    }`}
+                  >
                     <input
-                      type="text"
-                      className="survey-text-input"
-                      placeholder="Bitte Grund angeben..."
-                      value={contractLeftOther}
-                      onChange={(e) => setContractLeftOther(e.target.value)}
+                      type="radio"
+                      name="contractLeft"
+                      value={option}
+                      checked={contractLeftChoice === option}
+                      onChange={() => setContractLeftChoice(option)}
                     />
-                  )}
-                </div>
+                    <span>{option === 'OTHER' ? 'Anderer Grund:' : option}</span>
+                  </label>
+                ))}
+                {contractLeftChoice === 'OTHER' && (
+                  <input
+                    type="text"
+                    className="survey-text-input"
+                    placeholder="Bitte Grund angeben..."
+                    value={contractLeftOther}
+                    onChange={(e) => setContractLeftOther(e.target.value)}
+                  />
+                )}
               </div>
+            </div>
+          )}
 
-              <div className="survey-question">
-                <span className="survey-question__title">
-                  Falls bis zum Ende im Abkommen geblieben: Was war der wichtigste Grund, warum du bis zum Schluss im Abkommen geblieben bist?
-                </span>
-                <div className="survey-radio-list">
-                  {CONTRACT_STAYED_OPTIONS.map((option) => (
-                    <label
-                      key={option}
-                      className={`survey-radio-item ${
-                        contractStayedChoice === option ? 'survey-radio-item--selected' : ''
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="contractStayed"
-                        value={option}
-                        checked={contractStayedChoice === option}
-                        onChange={() => setContractStayedChoice(option)}
-                      />
-                      <span>{option === 'OTHER' ? 'Anderer Grund:' : option}</span>
-                    </label>
-                  ))}
-                  {contractStayedChoice === 'OTHER' && (
+          {showStayedQuestion && (
+            <div className="survey-question">
+              <span className="survey-question__title">
+                Was war der wichtigste Grund, warum du im Abkommen geblieben bist?
+              </span>
+              <div className="survey-radio-list">
+                {CONTRACT_STAYED_OPTIONS.map((option) => (
+                  <label
+                    key={option}
+                    className={`survey-radio-item ${
+                      contractStayedChoice === option ? 'survey-radio-item--selected' : ''
+                    }`}
+                  >
                     <input
-                      type="text"
-                      className="survey-text-input"
-                      placeholder="Bitte Grund angeben..."
-                      value={contractStayedOther}
-                      onChange={(e) => setContractStayedOther(e.target.value)}
+                      type="radio"
+                      name="contractStayed"
+                      value={option}
+                      checked={contractStayedChoice === option}
+                      onChange={() => setContractStayedChoice(option)}
                     />
-                  )}
-                </div>
+                    <span>{option === 'OTHER' ? 'Anderer Grund:' : option}</span>
+                  </label>
+                ))}
+                {contractStayedChoice === 'OTHER' && (
+                  <input
+                    type="text"
+                    className="survey-text-input"
+                    placeholder="Bitte Grund angeben..."
+                    value={contractStayedOther}
+                    onChange={(e) => setContractStayedOther(e.target.value)}
+                  />
+                )}
               </div>
-            </>
+            </div>
           )}
 
           {/* Demografie & Twint */}
