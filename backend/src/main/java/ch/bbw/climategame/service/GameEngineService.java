@@ -222,8 +222,18 @@ public class GameEngineService {
 
     @Transactional
     public GameStateResponse submitContractJoin(String sessionToken, boolean join) {
+        return submitContractJoin(sessionToken, join ? "YES" : "NO");
+    }
+
+    @Transactional
+    public GameStateResponse submitContractJoin(String sessionToken, String rawChoice) {
         if (sessionToken == null || sessionToken.isBlank()) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Kein gültiges Spieler-Token vorhanden.");
+        }
+
+        String choice = rawChoice == null ? "" : rawChoice.trim().toUpperCase();
+        if (!Set.of("YES", "CONDITIONAL", "NO").contains(choice)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ungültige Beitritts-Option: " + rawChoice);
         }
 
         Player tokenPlayer = playerRepository.findBySessionToken(sessionToken)
@@ -241,8 +251,9 @@ public class GameEngineService {
         }
 
         tokenPlayer.setContractJoinDecided(true);
-        tokenPlayer.setInContract(join);
-        tokenPlayer.setEverJoinedContract(join);
+        tokenPlayer.setContractJoinChoice(choice);
+        tokenPlayer.setInContract("YES".equals(choice));
+        tokenPlayer.setEverJoinedContract("YES".equals(choice));
         tokenPlayer.setLastSeenAt(Instant.now());
         playerRepository.save(tokenPlayer);
 
@@ -250,137 +261,60 @@ public class GameEngineService {
         long decidedCount = allPlayers.stream().filter(Player::isContractJoinDecided).count();
 
         if (decidedCount >= groupSize) {
+            long potentialMembers = allPlayers.stream()
+                    .filter(p -> "YES".equals(p.getContractJoinChoice()) || "CONDITIONAL".equals(p.getContractJoinChoice()))
+                    .count();
+            long conditionalCount = allPlayers.stream()
+                    .filter(p -> "CONDITIONAL".equals(p.getContractJoinChoice()))
+                    .count();
+            int minHalf = (groupSize + 1) / 2;
+            boolean conditionalFulfilled = potentialMembers >= minHalf;
+
+            for (Player p : allPlayers) {
+                String c = p.getContractJoinChoice();
+                boolean joined = "YES".equals(c) || ("CONDITIONAL".equals(c) && conditionalFulfilled);
+                p.setInContract(joined);
+                p.setEverJoinedContract(joined);
+            }
+            playerRepository.saveAll(allPlayers);
+
             long memberCount = allPlayers.stream().filter(Player::isInContract).count();
             if (memberCount > 0) {
                 session.setContractActive(true);
-                session.setLastContractEvent(memberCount + " von " + groupSize + " Spielern sind dem Abkommen beigetreten.");
+                if (!conditionalFulfilled && conditionalCount > 0) {
+                    session.setLastContractEvent(
+                            memberCount + " von " + groupSize + " Spielern sind im Abkommen (Bedingung ≥ " + minHalf + " wurde nicht erreicht)."
+                    );
+                } else {
+                    session.setLastContractEvent(
+                            memberCount + " von " + groupSize + " Spielern sind dem Abkommen beigetreten."
+                    );
+                }
             } else {
                 session.setContractActive(false);
-                session.setLastContractEvent("Kein Spieler ist dem Abkommen beigetreten. Es gilt kein Mindestbeitrag.");
+                if (!conditionalFulfilled && conditionalCount > 0) {
+                    session.setLastContractEvent(
+                            "Kein Spieler ist im Abkommen (weniger als " + minHalf + " potenzielle Mitglieder). Es gilt kein Mindestbeitrag."
+                    );
+                } else {
+                    session.setLastContractEvent("Kein Spieler ist dem Abkommen beigetreten. Es gilt kein Mindestbeitrag.");
+                }
             }
             session.setRoundPhase(RoundPhase.INVESTMENT);
             session.setRoundStartTime(Instant.now());
             sessionRepository.save(session);
         }
 
-        List<RoundInvestment> allInvestments = investmentRepository.findBySessionIdOrderByRoundNumberAscPlayerNumberAsc(session.getId());
-        return buildGameStateResponse(session, tokenPlayer, allPlayers, allInvestments);
-    }
-
-    @Transactional
-    public GameStateResponse submitContractReviewAction(String sessionToken, String rawAction) {
-        if (sessionToken == null || sessionToken.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Kein gültiges Spieler-Token vorhanden.");
-        }
-
-        Player tokenPlayer = playerRepository.findBySessionToken(sessionToken)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Spieler-Sitzung ungültig."));
-
-        GameSession session = sessionRepository.findByIdForUpdate(tokenPlayer.getSession().getId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session nicht gefunden."));
-
-        if (session.getStatus() != SessionStatus.RUNNING || session.getRoundPhase() != RoundPhase.CONTRACT_REVIEW) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Aktuell befindet sich das Spiel nicht in der Zwischenphase des Abkommens.");
-        }
-
-        if (!tokenPlayer.isInContract()) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Nur aktive Mitglieder des Abkommens können diese Aktion ausführen.");
-        }
-
-        int currentRound = session.getCurrentRound();
-        String action = rawAction == null ? "" : rawAction.trim().toUpperCase();
-        tokenPlayer.setLastSeenAt(Instant.now());
-
-        List<Player> allPlayers = playerRepository.findBySessionIdOrderByPlayerNumberAsc(session.getId());
-
-        switch (action) {
-            case "STAY" -> {
-                tokenPlayer.setContractReviewDecidedRound(currentRound);
-                playerRepository.save(tokenPlayer);
-
-                boolean allMembersDecided = allPlayers.stream()
-                        .filter(Player::isInContract)
-                        .allMatch(p -> Integer.valueOf(currentRound).equals(p.getContractReviewDecidedRound()));
-                if (allMembersDecided) {
-                    session.setRoundPhase(RoundPhase.INVESTMENT);
-                    session.setRoundStartTime(Instant.now());
-                    sessionRepository.save(session);
-                }
-            }
-            case "LEAVE" -> {
-                List<Player> remainingMembers = allPlayers.stream()
-                        .filter(p -> p.isInContract() && p.getPlayerNumber() != tokenPlayer.getPlayerNumber())
-                        .toList();
-                int feePerMember = getFivePercentRappen(tokenPlayer.getInitialBalanceRappen());
-                int totalFeeRappen = feePerMember * remainingMembers.size();
-
-                if (tokenPlayer.getCurrentBalanceRappen() < totalFeeRappen) {
-                    throw new ResponseStatusException(
-                            HttpStatus.BAD_REQUEST,
-                            "Nicht genügend Guthaben für die Austrittsgebühr."
-                    );
-                }
-
-                tokenPlayer.setCurrentBalanceRappen(tokenPlayer.getCurrentBalanceRappen() - totalFeeRappen);
-                tokenPlayer.setInContract(false);
-                tokenPlayer.setLeftContract(true);
-                tokenPlayer.setLeftContractAtRound(currentRound);
-                tokenPlayer.setContractReviewDecidedRound(currentRound);
-
-                for (Player member : remainingMembers) {
-                    member.setCurrentBalanceRappen(member.getCurrentBalanceRappen() + feePerMember);
-                }
-                playerRepository.saveAll(allPlayers);
-
-                session.setLastContractEvent("Spieler " + tokenPlayer.getPlayerNumber() + " ist aus dem Abkommen ausgetreten.");
-
-                if (remainingMembers.isEmpty()) {
-                    session.setContractActive(false);
-                    session.setRoundPhase(RoundPhase.INVESTMENT);
-                    session.setRoundStartTime(Instant.now());
-                } else {
-                    boolean allRemainingDecided = remainingMembers.stream()
-                            .allMatch(p -> Integer.valueOf(currentRound).equals(p.getContractReviewDecidedRound()));
-                    if (allRemainingDecided) {
-                        session.setRoundPhase(RoundPhase.INVESTMENT);
-                        session.setRoundStartTime(Instant.now());
-                    }
-                }
-                sessionRepository.save(session);
-            }
-            case "START_VOTE" -> {
-                if (Integer.valueOf(currentRound).equals(session.getVoteInitiatedRound())) {
-                    throw new ResponseStatusException(
-                            HttpStatus.CONFLICT,
-                            "In dieser Zwischenrunde fand bereits eine Abstimmung über die Abschaffung statt."
-                    );
-                }
-                session.setVoteInitiatedRound(currentRound);
-                session.setVoteInitiatorPlayerNumber(tokenPlayer.getPlayerNumber());
-                session.setRoundPhase(RoundPhase.CONTRACT_VOTE);
-                session.setLastContractEvent("Spieler " + tokenPlayer.getPlayerNumber() + " hat eine Abstimmung zur Abschaffung des Abkommens gestartet.");
-
-                tokenPlayer.setContractVoteRound(currentRound);
-                tokenPlayer.setContractVoteAbolish(true);
-                playerRepository.save(tokenPlayer);
-
-                resolveContractVoteIfComplete(session, allPlayers, currentRound);
-                sessionRepository.save(session);
-            }
-            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unbekannte Abkommens-Aktion: " + action);
-        }
-
-        List<RoundInvestment> allInvestments = investmentRepository.findBySessionIdOrderByRoundNumberAscPlayerNumberAsc(session.getId());
         Player updatedPlayer = allPlayers.stream()
                 .filter(p -> p.getPlayerNumber() == tokenPlayer.getPlayerNumber())
                 .findFirst()
                 .orElse(tokenPlayer);
-
+        List<RoundInvestment> allInvestments = investmentRepository.findBySessionIdOrderByRoundNumberAscPlayerNumberAsc(session.getId());
         return buildGameStateResponse(session, updatedPlayer, allPlayers, allInvestments);
     }
 
     @Transactional
-    public GameStateResponse submitContractVote(String sessionToken, boolean abolish) {
+    public GameStateResponse leaveContract(String sessionToken) {
         if (sessionToken == null || sessionToken.isBlank()) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Kein gültiges Spieler-Token vorhanden.");
         }
@@ -391,26 +325,34 @@ public class GameEngineService {
         GameSession session = sessionRepository.findByIdForUpdate(tokenPlayer.getSession().getId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session nicht gefunden."));
 
-        if (session.getStatus() != SessionStatus.RUNNING || session.getRoundPhase() != RoundPhase.CONTRACT_VOTE) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Aktuell läuft keine Abstimmung über das Abkommen.");
+        if (session.getStatus() != SessionStatus.RUNNING || session.getRoundPhase() != RoundPhase.INVESTMENT) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Ein Austritt ist nur während einer laufenden Spielrunde möglich.");
         }
 
         if (!tokenPlayer.isInContract()) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Nur Mitglieder des Abkommens sind stimmberechtigt.");
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Sie sind aktuell kein Mitglied des Abkommens.");
         }
 
         int currentRound = session.getCurrentRound();
-        if (Integer.valueOf(currentRound).equals(tokenPlayer.getContractVoteRound())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Sie haben in dieser Abstimmung bereits abgestimmt.");
+        if (currentRound < 2) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Mitglieder dürfen das Abkommen erst nach der ersten Runde (ab Runde 2) verlassen."
+            );
         }
 
-        tokenPlayer.setContractVoteRound(currentRound);
-        tokenPlayer.setContractVoteAbolish(abolish);
+        tokenPlayer.setInContract(false);
+        tokenPlayer.setLeftContract(true);
+        tokenPlayer.setLeftContractAtRound(currentRound);
         tokenPlayer.setLastSeenAt(Instant.now());
         playerRepository.save(tokenPlayer);
 
         List<Player> allPlayers = playerRepository.findBySessionIdOrderByPlayerNumberAsc(session.getId());
-        resolveContractVoteIfComplete(session, allPlayers, currentRound);
+        long remainingMembers = allPlayers.stream().filter(Player::isInContract).count();
+        if (remainingMembers == 0) {
+            session.setContractActive(false);
+        }
+        session.setLastContractEvent("Spieler " + tokenPlayer.getPlayerNumber() + " hat das Abkommen verlassen.");
         sessionRepository.save(session);
 
         List<RoundInvestment> allInvestments = investmentRepository.findBySessionIdOrderByRoundNumberAscPlayerNumberAsc(session.getId());
@@ -420,54 +362,6 @@ public class GameEngineService {
                 .orElse(tokenPlayer);
 
         return buildGameStateResponse(session, updatedPlayer, allPlayers, allInvestments);
-    }
-
-    private void resolveContractVoteIfComplete(GameSession session, List<Player> allPlayers, int currentRound) {
-        List<Player> members = allPlayers.stream()
-                .filter(Player::isInContract)
-                .toList();
-
-        boolean allVoted = members.stream()
-                .allMatch(p -> Integer.valueOf(currentRound).equals(p.getContractVoteRound()));
-
-        if (!allVoted) {
-            return;
-        }
-
-        long yesVotes = members.stream()
-                .filter(p -> Boolean.TRUE.equals(p.getContractVoteAbolish()))
-                .count();
-        int totalMembers = members.size();
-
-        // Einfache Mehrheit (> 50% der Mitglieder)
-        if (yesVotes * 2 > totalMembers) {
-            session.setContractActive(false);
-            session.setContractAbolished(true);
-            session.setContractAbolishedAtRound(currentRound);
-            for (Player member : members) {
-                member.setInContract(false);
-            }
-            playerRepository.saveAll(members);
-            session.setLastContractEvent(
-                    "Abstimmung (" + yesVotes + "/" + totalMembers + " für Abschaffung): Das Abkommen wurde per Mehrheit kostenlos aufgelöst."
-            );
-            session.setRoundPhase(RoundPhase.INVESTMENT);
-            session.setRoundStartTime(Instant.now());
-        } else {
-            // Keine Mehrheit -> Abkommen bleibt aktiv, Rückkehr zu CONTRACT_REVIEW
-            for (Player member : members) {
-                if (Boolean.TRUE.equals(member.getContractVoteAbolish())) {
-                    member.setContractReviewDecidedRound(null);
-                }
-            }
-            playerRepository.saveAll(members);
-            session.setLastContractEvent(
-                    "Abstimmung (" + yesVotes + "/" + totalMembers + " für Abschaffung): Keine Mehrheit – das Abkommen bleibt bestehen."
-            );
-            boolean allReviewed = members.stream()
-                    .allMatch(p -> Integer.valueOf(currentRound).equals(p.getContractReviewDecidedRound()));
-            session.setRoundPhase(allReviewed ? RoundPhase.INVESTMENT : RoundPhase.CONTRACT_REVIEW);
-        }
     }
 
     @Transactional
@@ -583,13 +477,7 @@ public class GameEngineService {
             int nextRound = session.getCurrentRound() + 1;
             session.setCurrentRound(nextRound);
             session.setRoundStartTime(Instant.now());
-
-            long activeContractMembers = allPlayers.stream().filter(Player::isInContract).count();
-            if (session.getGameMode() == GameMode.WITH_CONTRACTS && session.isContractActive() && activeContractMembers > 0) {
-                session.setRoundPhase(RoundPhase.CONTRACT_REVIEW);
-            } else {
-                session.setRoundPhase(RoundPhase.INVESTMENT);
-            }
+            session.setRoundPhase(RoundPhase.INVESTMENT);
             sessionRepository.save(session);
         } else {
             // Nach Runde 10 -> Endabrechnung berechnen & Status FINISHED setzen.
@@ -757,6 +645,7 @@ public class GameEngineService {
                 player.isInContract(),
                 player.isEverJoinedContract(),
                 player.isLeftContract(),
+                player.getContractJoinChoice(),
                 myCurrentAmount,
                 allowedOptions,
                 hasSubmittedSurvey ? player.getFinalPayoutRappen() : null
@@ -775,10 +664,6 @@ public class GameEngineService {
                 isReady = surveyedPlayerNumbers.contains(pNum);
             } else if (roundPhase == RoundPhase.CONTRACT_JOIN) {
                 isReady = slotPlayer != null && slotPlayer.isContractJoinDecided();
-            } else if (roundPhase == RoundPhase.CONTRACT_REVIEW) {
-                isReady = slotPlayer != null && (!slotPlayer.isInContract() || Integer.valueOf(currentRound).equals(slotPlayer.getContractReviewDecidedRound()));
-            } else if (roundPhase == RoundPhase.CONTRACT_VOTE) {
-                isReady = slotPlayer != null && (!slotPlayer.isInContract() || Integer.valueOf(currentRound).equals(slotPlayer.getContractVoteRound()));
             } else {
                 isReady = currentRoundInvestments.containsKey(pNum);
             }
@@ -787,10 +672,10 @@ public class GameEngineService {
 
         int memberCount = (int) allPlayers.stream().filter(Player::isInContract).count();
         int fivePercentRappen = getFivePercentRappen(player.getInitialBalanceRappen());
-        int otherMembersCount = player.isInContract() ? Math.max(0, memberCount - 1) : memberCount;
-        int totalExitFeeForPlayerRappen = player.isInContract() ? fivePercentRappen * otherMembersCount : 0;
-        boolean canAffordExit = player.isInContract() && player.getCurrentBalanceRappen() >= totalExitFeeForPlayerRappen;
-        boolean voteAlreadyHeldThisRound = Integer.valueOf(currentRound).equals(session.getVoteInitiatedRound());
+        boolean canLeaveContractNow = session.getStatus() == SessionStatus.RUNNING
+                && roundPhase == RoundPhase.INVESTMENT
+                && player.isInContract()
+                && currentRound >= 2;
 
         boolean hasDecidedCurrentContractPhase = switch (roundPhase) {
             case CONTRACT_JOIN -> player.isContractJoinDecided();
@@ -805,11 +690,7 @@ public class GameEngineService {
                 session.isContractAbolished(),
                 memberCount,
                 fivePercentRappen,
-                fivePercentRappen,
-                totalExitFeeForPlayerRappen,
-                canAffordExit,
-                voteAlreadyHeldThisRound,
-                session.getVoteInitiatorPlayerNumber(),
+                canLeaveContractNow,
                 hasDecidedCurrentContractPhase,
                 session.getLastContractEvent()
         );

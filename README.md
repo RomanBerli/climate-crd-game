@@ -14,7 +14,7 @@ In Gruppen von standardmässig **6 Spielern** erhält jede Person ein Startkapit
 * **Das Risiko:** Wird das Ziel verfehlt, verlieren alle Spieler mit einer Wahrscheinlichkeit von **90 %** ihr gesamtes Restguthaben.
 * **Zwei Spielvarianten:**
   * **Variante 1 – Standard (`NORMAL`):** Klassisches Experiment ohne Verträge.
-  * **Variante 2 – Mit Klimaabkommen (`WITH_CONTRACTS`):** Vor Runde 1 können Spieler freiwillig einem Klimaabkommen beitreten, das einen Mindestbeitrag von **0.2 Fr.** pro Runde technisch erzwingt. Zwischen zwei Runden können Mitglieder entweder im Abkommen bleiben, gegen eine Gebühr von **0.2 Fr.** an jedes verbleibende Mitglied austreten oder eine Abstimmung zur kostenfreien Abschaffung des Abkommens (einfache Mehrheit $> 50\%$) starten.
+  * **Variante 2 – Mit Klimaabkommen (`WITH_CONTRACTS`):** Vor Runde 1 entscheiden die Spieler über den Beitritt zu einem freiwilligen Klimaabkommen mit drei Optionen: **«Ja»** (unbedingter Beitritt), **«Nur wenn min. die Hälfte dabei»** (Beitritt nur, wenn mindestens 3 von 6 Spielern bereit sind) oder **«Nein»**. Für Mitglieder ist der Beitrag von **0 Fr.** gesperrt, sodass pro Runde mindestens **5 %** (z. B. 0.20 Fr. bzw. 0.25 Fr.) eingezahlt werden müssen. Ab Runde 2 können Mitglieder das Abkommen optional wieder verlassen.
 * **Informationsdesign wie im Originalexperiment:** Während des Spiels sehen die Spieler **nicht** die kumulierte Gesamtsumme im Klimakonto und im Rückblick jeweils **nur die letzte abgeschlossene Runde**. Für eigene Berechnungen steht ein lokaler Notizblock im Browser zur Verfügung.
 * **Manuelle Rundensteuerung durch den Experimentator:** Keine Zeitdruck-Timer oder Zwangs-Entscheidungen – der Admin gibt die nächste Runde im Dashboard frei, sobald alle 6 Spieler ihre Wahl getroffen haben.
 * **Integrierter Abschluss-Fragebogen & CSV-Export:** Nach Runde 10 füllen alle Teilnehmenden direkt in der App einen Fragebogen aus (inkl. Drag-&-Drop-Motivationsranking, Vertragsfragen in Variante 2 sowie Demografie & Twint-Nummer) und sehen unmittelbar danach ihr individuelles Endergebnis. Alle Spiel- und Fragebogendaten lassen sich im Admin-Dashboard als Excel-kompatible CSV-Datei exportieren.
@@ -31,7 +31,7 @@ docker compose up --build
 
 Nach dem Start sind folgende Dienste erreichbar:
 * **Spieler-Ansicht (Lobby & Spiel):** [http://localhost:3000](http://localhost:3000)
-* **Admin-Dashboard (Spielleitung):** [http://localhost:3000/admin](http://localhost:3000/admin) *(Standard-Passwort: `climategame2026`)*
+* **Admin-Dashboard (Spielleitung):** [http://localhost:3000/admin](http://localhost:3000/admin) *(Standard-Passwort: `admin_geheim_123`)*
 * **Backend API (direkt):** `http://localhost:8080/api`
 
 Um alle Container zu stoppen und die Datenbank zurückzusetzen:
@@ -47,7 +47,7 @@ Sämtliche Einstellungen befinden sich zentral in [`backend/src/main/resources/a
 
 | Eigenschaft in `application.yml` | Umgebungsvariable | Standardwert | Beschreibung |
 | :--- | :--- | :--- | :--- |
-| `app.admin-secret` | `APP_ADMIN_SECRET` | `climategame2026` | Passwort für das Admin-Dashboard (`/admin`) |
+| `app.admin-secret` | `APP_ADMIN_SECRET` | `admin_geheim_123` | Passwort für das Admin-Dashboard (`/admin`) |
 | `app.game.start-amount-chf` | `ENV_START_AMOUNT` | `4` | Startkapital pro Spieler in Franken (`4 Fr.`) |
 | `app.game.group-size` | `ENV_GROUP_SIZE` | `6` | Anzahl Spieler pro Session |
 | `app.game.total-rounds` | `ENV_TOTAL_ROUNDS` | `10` | Anzahl zu spielender Runden |

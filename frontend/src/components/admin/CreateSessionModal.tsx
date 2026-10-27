@@ -23,7 +23,7 @@ const GAME_MODES: Array<{
     value: 'WITH_CONTRACTS',
     label: 'Variante 2: Mit Verträgen (Klimaabkommen)',
     description:
-      'Freiwilliger Beitritt zum Klimaabkommen vor Runde 1 (fester Mindestbeitrag pro Runde, Austritt gegen Gebühr an jedes verbleibende Mitglied oder kostenlose Auflösung per Mehrheitsabstimmung).',
+      'Freiwilliger Beitritt zum Klimaabkommen vor Runde 1 («Ja», «Nur wenn min. die Hälfte dabei» oder «Nein»), verbindlicher Mindestbeitrag pro Runde und optionaler Austritt ab Runde 2.',
     disabled: false,
   },
 ];

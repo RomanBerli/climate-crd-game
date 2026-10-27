@@ -8,11 +8,7 @@ public record ContractStateDto(
         boolean contractAbolished,
         int memberCount,
         int minInvestmentRappen,
-        int exitFeePerMemberRappen,
-        int totalExitFeeForPlayerRappen,
-        boolean canAffordExit,
-        boolean voteAlreadyHeldThisRound,
-        Integer voteInitiatorPlayerNumber,
+        boolean canLeaveContractNow,
         boolean hasDecidedCurrentContractPhase,
         String lastContractEvent
 ) {

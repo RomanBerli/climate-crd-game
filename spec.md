@@ -2,7 +2,7 @@
 
 ## 1. Projektübersicht & Zielsetzung
 Entwicklung einer webbasierten Applikation zur Durchführung eines spieltheoretischen Klima-Experiments (basierend auf *Milinski et al., 2008: "The collective-risk social dilemma and the maintenance of global climate"*).
-Die Plattform ermöglicht es Spielern in Gruppen über mehrere Runden hinweg Entscheidungen über Beiträge in ein gemeinsames Klimakonto zu treffen, unterstützt sowohl das klassische Basisspiel (**Variante 1: Standard**) als auch ein optionales **Klimaabkommen mit Mindestbeitrag, Austrittsgebühren und Abschaffungsabstimmungen (Variante 2: Mit Klimaabkommen)** und erhebt im Anschluss einen wissenschaftlichen Fragebogen.
+Die Plattform ermöglicht es Spielern in Gruppen über mehrere Runden hinweg Entscheidungen über Beiträge in ein gemeinsames Klimakonto zu treffen, unterstützt sowohl das klassische Basisspiel (**Variante 1: Standard**) als auch ein freiwilliges **Klimaabkommen mit bedingtem/unbedingtem Beitritt, Mindestbeitrag und optionalem Austritt ab Runde 2 (Variante 2: Mit Klimaabkommen)** und erhebt im Anschluss einen wissenschaftlichen Fragebogen.
 
 ---
 
@@ -42,29 +42,25 @@ Alle Spielparameter werden zentral in [`application.yml`](backend/src/main/resou
 
 ## 3. Variante 2: Klimaabkommen (`WITH_CONTRACTS`)
 
-Beim Erstellen einer Session im Admin-Dashboard kann zwischen **Variante 1: Standard (Ohne Abkommen)** (`NORMAL`) und **Variante 2: Mit Klimaabkommen (Verträge & Abstimmung)** (`WITH_CONTRACTS`) gewählt werden. In Variante 2 gelten alle Regeln aus Variante 1 sowie zusätzlich folgende Vertragsmechanismen:
+Beim Erstellen einer Session im Admin-Dashboard kann zwischen **Variante 1: Normal** (`NORMAL`) und **Variante 2: Mit Verträgen (Klimaabkommen)** (`WITH_CONTRACTS`) gewählt werden. In Variante 2 gelten alle Regeln aus Variante 1 sowie zusätzlich folgende Abkommensmechanismen:
 
 ### 3.1 Freiwilliger Beitritt vor Runde 1 (`CONTRACT_JOIN`)
-* Vor der 1. Investitionsrunde entscheidet jeder Spieler freiwillig, ob er dem Klimaabkommen beitritt (`Beitreten`) oder nicht (`Nicht beitreten`).
+* Vor der 1. Investitionsrunde entscheidet jeder der 6 Spieler über den Beitritt zum Klimaabkommen zwischen **drei Optionen**:
+  1. **«Ja» (`YES`):** Unbedingter Beitritt – der Spieler wird unabhängig von der Wahl der anderen immer Mitglied.
+  2. **«Nur wenn min. die Hälfte dabei» (`CONDITIONAL`):** Bedingter Beitritt – der Spieler wird nur dann Mitglied, wenn insgesamt mindestens die Hälfte der Gruppe ($\ge 3$ von 6 Spielern mit `YES` oder `CONDITIONAL`) bereit ist beizutreten. Sind es weniger als 3 potenzielle Mitglieder, bleibt er Nichtmitglied.
+  3. **«Nein» (`NO`):** Kein Beitritt – der Spieler spielt als Nichtmitglied.
 * Ein späterer Beitritt in darauffolgenden Runden ist **nicht** möglich.
 * Für alle Spieler ist jederzeit transparent ersichtlich, welche Gruppenmitglieder im Abkommen sind (`📜 Im Abkommen`) und wer ausgetreten ist (`Ausgetreten`).
 
 ### 3.2 Technisch erzwungener Mindestbeitrag (`INVESTMENT`)
-* Das Klimaabkommen verpflichtet jedes aktive Mitglied, pro Runde **mindestens 5% (`0.2 Fr.`)** in das Klimakonto einzuzahlen.
-* Die Option `0 Fr.` ist für aktive Abkommensmitglieder sowohl im Frontend gesperrt als auch im Backend technisch blockiert; wählbar sind somit nur `0.2 Fr.` oder `0.4 Fr.`.
+* **Nichtmitglieder:** Wählen pro Runde frei zwischen **0%** (`0 Fr.`), **5%** (z. B. `0.20 Fr.` / `0.25 Fr.`) und **10%** (z. B. `0.40 Fr.` / `0.50 Fr.`).
+* **Mitglieder:** Das Klimaabkommen verpflichtet jedes aktive Mitglied, pro Runde **mindestens 5%** des Startkapitals in das Klimakonto einzuzahlen. Die Option `0 Fr.` ist für aktive Abkommensmitglieder sowohl im Frontend gesperrt als auch im Backend technisch blockiert; wählbar sind somit nur die 5%- oder 10%-Option.
 
-### 3.3 Vertragsprüfung zwischen zwei Runden (`CONTRACT_REVIEW` & `CONTRACT_VOTE`)
-Vor Beginn jeder neuen Runde (Runden 2 bis 10) durchlaufen alle aktiven Abkommensmitglieder (sofern noch mindestens 2 Mitglieder im Abkommen sind) eine Vertragsphase mit drei Optionen:
-1. **Im Abkommen bleiben (`STAY`):** Der Spieler bleibt regulär im Abkommen.
-2. **Aus dem Abkommen austreten (`LEAVE`):**
-   * Der Spieler verlässt das Abkommen sofort.
-   * **Austrittsgebühr:** Er bezahlt an **jedes verbleibende Abkommensmitglied** eine Gebühr von `0.2 Fr.` (5% des Startkapitals).
-   * Die Summe wird direkt vom Guthaben des Austretenden abgezogen und den Konten der verbleibenden Abkommensmitglieder gutgeschrieben.
-   * Ein Austritt ist nur möglich, wenn das verbleibende persönliche Guthaben des Spielers für die gesamte Austrittsgebühr ausreicht.
-3. **Abstimmung zur Abschaffung starten (`START_VOTE` -> `CONTRACT_VOTE`):**
-   * Startet mindestens ein verbleibendes Mitglied eine Abstimmung, wechseln alle verbleibenden Abkommensmitglieder in die Abstimmungsphase (`CONTRACT_VOTE`).
-   * Jedes Mitglied stimmt für **Abkommen abschaffen** oder **Abkommen behalten**.
-   * **Einfache Mehrheit (> 50%):** Stimmen mehr als die Hälfte der abstimmenden Mitglieder für die Abschaffung, wird das Klimaabkommen sofort für alle aufgelöst. Es fallen **keine Gebühren** an, und ab dieser Runde gibt es keine Mindestbeitragspflicht mehr. Andernfalls bleibt das Abkommen bestehen.
+### 3.3 Optionaler Austritt ab Runde 2 (`POST /api/game/contract/leave`)
+* In **Runde 1** ist ein Austritt noch nicht möglich, sodass jedes Mitglied mindestens in der ersten Runde seinen Pflichtbeitrag leistet.
+* **Ab Runde 2** (nach der ersten Runde) können aktive Mitglieder das Abkommen jederzeit kostenlos verlassen – sowohl **vor** als auch **nach** dem Investieren in der jeweiligen Runde.
+* Im Frontend ist diese Aktion bewusst dezent als untergeordnete Option (*«Aus dem Abkommen austreten»*) unterhalb der Beitragsauswahl platziert.
+* Nach einem Austritt wechselt der Spieler dauerhaft in den Status **Nichtmitglied** (`inContract = false`, `leftContract = true`) und kann (sofern er in der aktuellen Runde noch nicht eingezahlt hat) ab sofort wieder `0 Fr.` wählen.
 
 ---
 
@@ -82,11 +78,11 @@ Sobald das Spiel den Status `FINISHED` erreicht, wird jedem Spieler **vor** der 
 1. **Erwartete Wahrscheinlichkeit (`0%–100%`):** *"Mit welcher Wahrscheinlichkeit (0% - 100%) hast du erwartet, dass deine Gruppe das Ziel erreicht?"*
 2. **Reaktion auf Ungleichheit (Single-Choice):** Verhalten, wenn andere weniger beigetragen haben (Trotzdem viel gezahlt / Beitrag reduziert / Geärgert, aber gleich weitergemacht / Nicht darauf geachtet).
 3. **Motivations-Ranking (Drag & Drop):** Sortierung von 4 Faktoren nach Wichtigkeit (Eigener Gewinn, Schutz vor Klimaverlust, Fairness innerhalb der Gruppe, Verhalten der anderen Spieler).
-4. **Zusatzfragen zum Klimaabkommen (nur in Variante 2 `WITH_CONTRACTS`):**
-   * *Was hat deine Entscheidung beeinflusst, dem Abkommen beizutreten oder nicht beizutreten?*
-   * *Wie hat das Abkommen dein Vertrauen in die Gruppe beeinflusst?*
-   * *Wie bewertest du die Austrittsgebühr?*
-   * *Welchen Einfluss hatte die Möglichkeit, das Abkommen per Abstimmung abzuschaffen?*
+4. **Zusatzfragen zum Klimaabkommen (nur in Variante 2 `WITH_CONTRACTS`, abhängig vom tatsächlichen Verhalten des Spielers):**
+   * *Was war der wichtigste Grund, warum du dem Abkommen beigetreten bist?* (falls beigetreten)
+   * *Was war der wichtigste Grund, warum du dem Abkommen nicht beigetreten bist?* (falls nicht beigetreten)
+   * *Was war der wichtigste Grund für deinen Austritt aus dem Abkommen?* (falls ausgetreten)
+   * *Was war der wichtigste Grund, warum du im Abkommen geblieben bist?* (falls bis zum Schluss geblieben)
 5. **Demografie & Auszahlung:**
    * **Alter** (Pflichtfeld)
    * **Geschlecht:** `Mann` oder `Frau` (Pflichtfeld)
@@ -113,7 +109,7 @@ Das UI folgt einem klaren, kantigen ("boxy", minimale Rundungen von `2px`–`4px
 ### 5.2 Aufbau der Spieler-Ansicht (`GamePage`)
 * **Header:** Raumname, eigenes Pseudonym, aktuelle Runde (`X / 10`), Klimaziel (`12 Fr.`) und persönliches Restguthaben in `Fr.`.
 * **Linke Hauptspalte (von oben nach unten):**
-  1. **Aktuelle Aktions-Card (leicht roter Hintergrund `#FCE8E4`):** Je nach Phase entweder Beitrittsentscheidung zum Klimaabkommen, Vertragsprüfung/Abstimmung zwischen den Runden oder Beitrag für das Klimakonto (`0 Fr.`, `0.2 Fr.`, `0.4 Fr.`). Eine kompakte rote Hinweisbox zeigt den aktuellen eigenen Abkommensstatus (mit 10-Sekunden-Info-Toast nach einer abgeschlossenen Abstimmung).
+  1. **Aktuelle Aktions-Card (leicht roter Hintergrund `#FCE8E4`):** Je nach Phase entweder Beitrittsentscheidung zum Klimaabkommen (`CONTRACT_JOIN` vor Runde 1) oder Beitrag für das Klimakonto (`INVESTMENT`, inkl. dezentem Austritts-Link ab Runde 2 für aktive Mitglieder). Eine kompakte Hinweisbox zeigt den aktuellen eigenen Abkommensstatus sowie kurzzeitige Abkommens-Meldungen.
   2. **Rückblick letzte Runde (`HistoryTable`):** Zeigt ab Runde 2 die Einzelbeiträge und die Rundensumme der jeweils letzten abgeschlossenen Runde.
   3. **Status der Gruppe (`PlayerStatusList`):** Unterste Card mit den 6 anonymisierten Spielern, ihrem Abkommens-Badge (`📜 Im Abkommen` / `Ausgetreten`) und ihrem aktuellen Entscheidungsstatus (`Entschieden` / `Überlegt...`).
 * **Rechte Seitenspalte:** Privater, lokal gespeicherter **Notizblock** (`LocalNotepad`) für eigene Berechnungen.
@@ -122,4 +118,4 @@ Das UI folgt einem klaren, kantigen ("boxy", minimale Rundungen von `2px`–`4px
 * **Passwortschutz:** Zugriff über das in `application.yml` definierte Admin-Passwort (`app.admin-secret`).
 * **Session-Erstellung:** Wahl des Raumnamens und des Spielmodus (`NORMAL` oder `WITH_CONTRACTS`).
 * **Live-Steuerung:** Übersicht über alle Räume, verbundene Spieler, deren Bereitschaftsstatus in der aktuellen Runde (`✓ Hat gewählt` / `⏳ Überlegt...`), Button zum Starten des Spiels sowie Button `"Nächste Runde freigeben"` bzw. `"Experiment abschliessen"`.
-* **Vollständiger CSV-Export (`export.csv`):** Exportiert pro Session eine Excel-kompatible CSV-Datei (UTF-8 mit BOM) mit allen Spielerdaten, Rundenbeiträgen (`round_1_chf` bis `round_10_chf`), Vertragsstatus (`ever_joined_contract`, `left_contract`, `in_contract_at_end`), Endergebnis sowie sämtlichen Antworten aus dem Abschluss-Fragebogen.
+* **Vollständiger CSV-Export (`export.csv`):** Exportiert pro Session eine Excel-kompatible CSV-Datei (UTF-8 mit BOM) mit allen Spielerdaten, Rundenbeiträgen, Abkommensstatus (`contract_join_choice`, `ever_joined_contract`, `left_contract`, `in_contract_at_end`, `left_contract_at_round`), Endergebnis sowie sämtlichen Antworten aus dem Abschluss-Fragebogen.

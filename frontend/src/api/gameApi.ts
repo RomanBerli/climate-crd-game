@@ -1,5 +1,10 @@
 import { apiRequest, setStoredPlayerToken } from './client';
-import { GameStateResponse, JoinLobbyResponse, SubmitSurveyPayload } from '../types/game';
+import {
+  ContractJoinChoice,
+  GameStateResponse,
+  JoinLobbyResponse,
+  SubmitSurveyPayload,
+} from '../types/game';
 
 export async function joinLobby(code: string): Promise<JoinLobbyResponse> {
   const response = await apiRequest<JoinLobbyResponse>('/api/lobby/join', {
@@ -33,26 +38,16 @@ export async function submitInvestment(amountRappen: number): Promise<GameStateR
   });
 }
 
-export async function submitContractJoin(join: boolean): Promise<GameStateResponse> {
+export async function submitContractJoin(choice: ContractJoinChoice): Promise<GameStateResponse> {
   return apiRequest<GameStateResponse>('/api/game/contract/join', {
     method: 'POST',
-    body: JSON.stringify({ join }),
+    body: JSON.stringify({ choice }),
   });
 }
 
-export async function submitContractReview(
-  action: 'STAY' | 'LEAVE' | 'START_VOTE'
-): Promise<GameStateResponse> {
-  return apiRequest<GameStateResponse>('/api/game/contract/review', {
+export async function submitContractLeave(): Promise<GameStateResponse> {
+  return apiRequest<GameStateResponse>('/api/game/contract/leave', {
     method: 'POST',
-    body: JSON.stringify({ action }),
-  });
-}
-
-export async function submitContractVote(abolish: boolean): Promise<GameStateResponse> {
-  return apiRequest<GameStateResponse>('/api/game/contract/vote', {
-    method: 'POST',
-    body: JSON.stringify({ abolish }),
   });
 }
 

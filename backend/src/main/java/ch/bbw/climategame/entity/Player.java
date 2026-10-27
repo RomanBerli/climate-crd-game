@@ -63,6 +63,9 @@ public class Player {
     @Column(name = "contract_join_decided", nullable = false)
     private boolean contractJoinDecided = false;
 
+    @Column(name = "contract_join_choice", length = 20)
+    private String contractJoinChoice;
+
     @Column(name = "contract_review_decided_round")
     private Integer contractReviewDecidedRound;
 
@@ -176,6 +179,14 @@ public class Player {
 
     public void setContractJoinDecided(boolean contractJoinDecided) {
         this.contractJoinDecided = contractJoinDecided;
+    }
+
+    public String getContractJoinChoice() {
+        return contractJoinChoice;
+    }
+
+    public void setContractJoinChoice(String contractJoinChoice) {
+        this.contractJoinChoice = contractJoinChoice;
     }
 
     public Integer getContractReviewDecidedRound() {

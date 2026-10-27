@@ -208,7 +208,7 @@ class ClimateGameIntegrationTest {
         String roundInfoCsv = adminService.exportSessionCsv(created.id(), "round_info");
         String[] roundInfoLines = roundInfoCsv.trim().split("\n");
         assertThat(roundInfoLines).hasSize(7);
-        assertThat(roundInfoLines[0]).contains("session_code,game_mode,target_sum_rappen,total_invested_rappen,target_reached,risk_occurred,player_number,player_total_invested_rappen,balance_before_risk_rappen,final_payout_rappen,final_payout_chf,ever_joined_contract,left_contract,in_contract_at_end,left_contract_at_round,contract_abolished,contract_abolished_at_round");
+        assertThat(roundInfoLines[0]).contains("session_code,game_mode,target_sum_rappen,total_invested_rappen,target_reached,risk_occurred,player_number,player_total_invested_rappen,balance_before_risk_rappen,final_payout_rappen,final_payout_chf,contract_join_choice,ever_joined_contract,left_contract,in_contract_at_end,left_contract_at_round");
 
         // 3. Check Invest CSV (60 investment rows)
         String investCsv = adminService.exportSessionCsv(created.id(), "invest");
@@ -233,7 +233,7 @@ class ClimateGameIntegrationTest {
     }
 
     @Test
-    void variantTwoWithContractsEnforcesMinimumAndSupportsPaidExitAndMajorityAbolition() {
+    void variantTwoWithContractsSupportsConditionalJoinAndExitFromRoundTwoBeforeAndAfterInvesting() {
         AdminSessionResponse created = adminService.createSession(GameMode.WITH_CONTRACTS);
         assertThat(created.gameMode()).isEqualTo(GameMode.WITH_CONTRACTS);
 
@@ -248,94 +248,104 @@ class ClimateGameIntegrationTest {
         assertThat(started.currentRound()).isEqualTo(1);
         assertThat(started.roundPhase()).isEqualTo(RoundPhase.CONTRACT_JOIN);
 
-        // Players 1..4 join the contract, Players 5..6 do not join
+        // Players 1..2 choose YES, Players 3..4 choose CONDITIONAL ("Nur wenn min. die Hälfte dabei"), Players 5..6 choose NO
+        // Total potential members = 4 (>= 3) -> Players 1..4 all become members!
+        String[] choices = {"YES", "YES", "CONDITIONAL", "CONDITIONAL", "NO", "NO"};
         for (int i = 0; i < 6; i++) {
-            boolean join = i < 4;
-            GameStateResponse afterJoinDecision = gameEngineService.submitContractJoin(players.get(i).sessionToken(), join);
+            GameStateResponse afterJoinDecision = gameEngineService.submitContractJoin(players.get(i).sessionToken(), choices[i]);
             if (i < 5) {
                 assertThat(afterJoinDecision.roundPhase()).isEqualTo(RoundPhase.CONTRACT_JOIN);
             } else {
-                // Once all 6 decided -> automatically switches to Round 1 INVESTMENT
                 assertThat(afterJoinDecision.roundPhase()).isEqualTo(RoundPhase.INVESTMENT);
                 assertThat(afterJoinDecision.contractState().contractActive()).isTrue();
                 assertThat(afterJoinDecision.contractState().memberCount()).isEqualTo(4);
             }
         }
 
+        // Verify Player 3 (CONDITIONAL) became a member
+        GameStateResponse p3StateR1 = gameEngineService.getPlayerGameState(players.get(2).sessionToken());
+        assertThat(p3StateR1.player().inContract()).isTrue();
+        assertThat(p3StateR1.player().contractJoinChoice()).isEqualTo("CONDITIONAL");
+        assertThat(p3StateR1.contractState().canLeaveContractNow()).isFalse();
+
+        // Round 1: Leaving contract is NOT allowed in Round 1 ( neither before nor after investing )
+        assertThatThrownBy(() -> gameEngineService.leaveContract(players.get(0).sessionToken()))
+                .isInstanceOf(ResponseStatusException.class);
+
         // Round 1: Player 1 (contract member) cannot invest 0 Rappen (5% = 20 Rappen minimum enforced)
         assertThatThrownBy(() -> gameEngineService.submitInvestment(players.get(0).sessionToken(), 0))
                 .isInstanceOf(ResponseStatusException.class);
 
-        // Player 5 (not in contract) CAN invest 0 Rappen
+        // Player 5 & 6 (not in contract) CAN invest 0 Rappen
         gameEngineService.submitInvestment(players.get(4).sessionToken(), 0);
         gameEngineService.submitInvestment(players.get(5).sessionToken(), 0);
 
-        // Contract members 1..4 invest 20 Rappen each (balance becomes 400 - 20 = 380)
+        // Contract members 1..4 invest 20 Rappen each
         for (int i = 0; i < 4; i++) {
             gameEngineService.submitInvestment(players.get(i).sessionToken(), 20);
         }
 
-        // Admin advances to Round 2 -> enters CONTRACT_REVIEW between Round 1 and Round 2
+        // Still in Round 1 after investing -> leaving still not allowed until Round 2
+        assertThatThrownBy(() -> gameEngineService.leaveContract(players.get(0).sessionToken()))
+                .isInstanceOf(ResponseStatusException.class);
+
+        // Admin advances to Round 2 -> goes directly to INVESTMENT (no intermediate phase)
         AdminSessionResponse round2Admin = adminService.advanceRound(created.id());
         assertThat(round2Admin.currentRound()).isEqualTo(2);
-        assertThat(round2Admin.roundPhase()).isEqualTo(RoundPhase.CONTRACT_REVIEW);
+        assertThat(round2Admin.roundPhase()).isEqualTo(RoundPhase.INVESTMENT);
 
-        // Player 1 exits contract in between rounds: pays 20 Rappen to each of the 3 remaining members (Players 2, 3, 4)
-        // Player 1 balance: 380 - (3 * 20) = 320 Rappen
-        // Players 2, 3, 4 balance: 380 + 20 = 400 Rappen
-        GameStateResponse p1AfterExit = gameEngineService.submitContractReviewAction(players.get(0).sessionToken(), "LEAVE");
+        // In Round 2 BEFORE investing: Player 1 leaves the contract for free and can immediately invest 0 Rappen
+        GameStateResponse p1AfterExit = gameEngineService.leaveContract(players.get(0).sessionToken());
         assertThat(p1AfterExit.player().inContract()).isFalse();
         assertThat(p1AfterExit.player().leftContract()).isTrue();
-        assertThat(p1AfterExit.player().currentBalanceRappen()).isEqualTo(320);
+        assertThat(p1AfterExit.player().currentBalanceRappen()).isEqualTo(380);
         assertThat(p1AfterExit.contractState().memberCount()).isEqualTo(3);
 
-        // Remaining members 2, 3, 4 choose STAY -> transitions to Round 2 INVESTMENT
-        gameEngineService.submitContractReviewAction(players.get(1).sessionToken(), "STAY");
-        gameEngineService.submitContractReviewAction(players.get(2).sessionToken(), "STAY");
-        GameStateResponse p4AfterStay = gameEngineService.submitContractReviewAction(players.get(3).sessionToken(), "STAY");
-        assertThat(p4AfterStay.roundPhase()).isEqualTo(RoundPhase.INVESTMENT);
-        assertThat(p4AfterStay.player().currentBalanceRappen()).isEqualTo(400);
-
-        // In Round 2, Player 1 (who left contract) can now invest 0 Rappen!
         gameEngineService.submitInvestment(players.get(0).sessionToken(), 0);
+
+        // Players 2, 3, 4 invest 20 Rappen in Round 2
         for (int i = 1; i < 4; i++) {
             gameEngineService.submitInvestment(players.get(i).sessionToken(), 20);
         }
         gameEngineService.submitInvestment(players.get(4).sessionToken(), 0);
         gameEngineService.submitInvestment(players.get(5).sessionToken(), 0);
 
-        // Admin advances to Round 3 -> enters CONTRACT_REVIEW for remaining 3 members (Players 2, 3, 4)
-        AdminSessionResponse round3Admin = adminService.advanceRound(created.id());
-        assertThat(round3Admin.currentRound()).isEqualTo(3);
-        assertThat(round3Admin.roundPhase()).isEqualTo(RoundPhase.CONTRACT_REVIEW);
+        // In Round 2 AFTER investing: Player 2 also decides to leave the contract for future rounds
+        GameStateResponse p2AfterExit = gameEngineService.leaveContract(players.get(1).sessionToken());
+        assertThat(p2AfterExit.player().inContract()).isFalse();
+        assertThat(p2AfterExit.player().leftContract()).isTrue();
+        assertThat(p2AfterExit.contractState().memberCount()).isEqualTo(2);
 
-        // Player 2 initiates vote to abolish contract -> switches to CONTRACT_VOTE (Player 2 auto-votes YES)
-        GameStateResponse afterStartVote = gameEngineService.submitContractReviewAction(players.get(1).sessionToken(), "START_VOTE");
-        assertThat(afterStartVote.roundPhase()).isEqualTo(RoundPhase.CONTRACT_VOTE);
-
-        // Player 3 votes YES (for abolition), Player 4 votes NO -> 2 of 3 (> 50%) majority abolishes contract for free!
-        gameEngineService.submitContractVote(players.get(2).sessionToken(), true);
-        GameStateResponse afterVoteResolved = gameEngineService.submitContractVote(players.get(3).sessionToken(), false);
-        assertThat(afterVoteResolved.roundPhase()).isEqualTo(RoundPhase.INVESTMENT);
-        assertThat(afterVoteResolved.contractState().contractActive()).isFalse();
-        assertThat(afterVoteResolved.contractState().contractAbolished()).isTrue();
-        assertThat(afterVoteResolved.contractState().memberCount()).isEqualTo(0);
-
-        // Now former members can invest 0 Rappen without paying any exit fee
-        gameEngineService.submitInvestment(players.get(1).sessionToken(), 0);
-
-        // Verify RoundInfo CSV tracks left_contract_at_round (2 for Player 1), contract_abolished_at_round (3), and exit fee balances
+        // Verify RoundInfo CSV tracks contract_join_choice and left_contract_at_round
         String roundInfoCsv = adminService.exportSessionCsv(created.id(), "round_info");
         String[] roundInfoLines = roundInfoCsv.trim().split("\n");
-        // Line 1 is Player 1: invested 20 total, balance 320, left_contract=true, left_contract_at_round=2, contract_abolished=true, contract_abolished_at_round=3
-        assertThat(roundInfoLines[1]).contains(",1,20,320,320,3.20,true,true,false,2,true,3");
-        // Line 2 is Player 2: invested 40 total (20 in R1, 20 in R2, 0 in R3), received 20 exit fee -> balance 380
-        assertThat(roundInfoLines[2]).contains(",2,40,380,380,3.80,true,false,false,,true,3");
+        assertThat(roundInfoLines[1]).contains(",1,20,380,380,3.80,YES,true,true,false,2");
+        assertThat(roundInfoLines[3]).contains(",3,40,360,360,3.60,CONDITIONAL,true,false,true,");
+        assertThat(roundInfoLines[5]).contains(",5,0,400,400,4.00,NO,false,false,false,");
+    }
 
-        // Verify Invest CSV tracks currently_in_contract per round
-        String investCsv = adminService.exportSessionCsv(created.id(), "invest");
-        // In Round 1, Player 1 was in contract (true); in Round 2, Player 1 was no longer in contract (false)
-        assertThat(investCsv).contains(",1,1,20,0.20,");
-        assertThat(investCsv).contains(",2,1,0,0.00,");
+    @Test
+    void conditionalJoinDoesNotBecomeMemberWhenFewerThanHalfWantToJoin() {
+        AdminSessionResponse created = adminService.createSession(GameMode.WITH_CONTRACTS);
+        List<JoinLobbyResponse> players = new ArrayList<>();
+        for (int i = 1; i <= 6; i++) {
+            players.add(gameEngineService.joinLobby(created.code(), null));
+        }
+        adminService.startSession(created.id());
+
+        // Player 1 chooses YES, Player 2 chooses CONDITIONAL, Players 3..6 choose NO
+        // Potential members = 2 (< 3) -> Only Player 1 becomes a member, Player 2 becomes a non-member!
+        String[] choices = {"YES", "CONDITIONAL", "NO", "NO", "NO", "NO"};
+        for (int i = 0; i < 6; i++) {
+            gameEngineService.submitContractJoin(players.get(i).sessionToken(), choices[i]);
+        }
+
+        GameStateResponse p1State = gameEngineService.getPlayerGameState(players.get(0).sessionToken());
+        GameStateResponse p2State = gameEngineService.getPlayerGameState(players.get(1).sessionToken());
+
+        assertThat(p1State.player().inContract()).isTrue();
+        assertThat(p2State.player().inContract()).isFalse();
+        assertThat(p2State.player().everJoinedContract()).isFalse();
+        assertThat(p1State.contractState().memberCount()).isEqualTo(1);
     }
 }

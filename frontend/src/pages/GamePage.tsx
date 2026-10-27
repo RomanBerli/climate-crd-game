@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { GameStateResponse } from '../types/game';
-import { submitInvestment } from '../api/gameApi';
+import { submitContractLeave, submitInvestment } from '../api/gameApi';
 import { useLocalNotepad } from '../hooks/useLocalNotepad';
 import { RoundHeader } from '../components/player/RoundHeader';
 import { ContractPhaseCard } from '../components/player/ContractPhaseCard';
@@ -34,6 +34,16 @@ export const GamePage: React.FC<GamePageProps> = ({
     }
   };
 
+  const handleLeaveContract = async () => {
+    setInvestError(null);
+    try {
+      const updated = await submitContractLeave();
+      onStateUpdated(updated);
+    } catch (err) {
+      setInvestError(err instanceof Error ? err.message : 'Fehler beim Verlassen des Abkommens.');
+    }
+  };
+
   const allPlayersReady = gameState.playersStatus.every((slot) => slot.isReady);
 
   return (
@@ -58,9 +68,11 @@ export const GamePage: React.FC<GamePageProps> = ({
               submittedAmount={gameState.player.currentRoundInvestmentRappen}
               allPlayersReady={allPlayersReady}
               inContract={gameState.player.inContract}
+              canLeaveContract={gameState.contractState?.canLeaveContractNow ?? false}
               minInvestmentRappen={gameState.contractState?.minInvestmentRappen ?? 0}
               lastContractEvent={gameState.contractState?.lastContractEvent ?? null}
               onInvest={handleInvest}
+              onLeaveContract={handleLeaveContract}
             />
           )}
 

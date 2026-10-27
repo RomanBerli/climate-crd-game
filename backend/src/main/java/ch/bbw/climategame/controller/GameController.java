@@ -1,8 +1,6 @@
 package ch.bbw.climategame.controller;
 
 import ch.bbw.climategame.dto.request.ContractJoinRequest;
-import ch.bbw.climategame.dto.request.ContractReviewRequest;
-import ch.bbw.climategame.dto.request.ContractVoteRequest;
 import ch.bbw.climategame.dto.request.InvestRequest;
 import ch.bbw.climategame.dto.request.SubmitSurveyRequest;
 import ch.bbw.climategame.dto.response.GameStateResponse;
@@ -59,31 +57,18 @@ public class GameController {
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authHeader
     ) {
         String token = LobbyController.resolveToken(request, xPlayerToken, authHeader);
-        GameStateResponse updatedState = gameEngineService.submitContractJoin(token, joinRequest.join());
+        GameStateResponse updatedState = gameEngineService.submitContractJoin(token, joinRequest.resolvedChoice());
         return ResponseEntity.ok(updatedState);
     }
 
-    @PostMapping("/contract/review")
-    public ResponseEntity<GameStateResponse> submitContractReview(
-            @Valid @RequestBody ContractReviewRequest reviewRequest,
+    @PostMapping("/contract/leave")
+    public ResponseEntity<GameStateResponse> leaveContract(
             HttpServletRequest request,
             @RequestHeader(value = "X-Player-Token", required = false) String xPlayerToken,
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authHeader
     ) {
         String token = LobbyController.resolveToken(request, xPlayerToken, authHeader);
-        GameStateResponse updatedState = gameEngineService.submitContractReviewAction(token, reviewRequest.action());
-        return ResponseEntity.ok(updatedState);
-    }
-
-    @PostMapping("/contract/vote")
-    public ResponseEntity<GameStateResponse> submitContractVote(
-            @Valid @RequestBody ContractVoteRequest voteRequest,
-            HttpServletRequest request,
-            @RequestHeader(value = "X-Player-Token", required = false) String xPlayerToken,
-            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authHeader
-    ) {
-        String token = LobbyController.resolveToken(request, xPlayerToken, authHeader);
-        GameStateResponse updatedState = gameEngineService.submitContractVote(token, voteRequest.abolish());
+        GameStateResponse updatedState = gameEngineService.leaveContract(token);
         return ResponseEntity.ok(updatedState);
     }
 

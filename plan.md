@@ -39,7 +39,7 @@ flowchart LR
 
 ### Zentrale Konfiguration (`application.yml`)
 Es gibt **keine** separate `AppProperties.java`-Klasse. Sämtliche Applikations- und Spielparameter werden zentral in [`backend/src/main/resources/application.yml`](backend/src/main/resources/application.yml) verwaltet und per `@Value` in die Spring-Komponenten injiziert:
-* `app.admin-secret` (Umgebungsvariable `APP_ADMIN_SECRET`, Standard: `climategame2026`)
+* `app.admin-secret` (Umgebungsvariable `APP_ADMIN_SECRET`, Standard: `admin_geheim_123`)
 * `app.game.start-amount-chf` (`ENV_START_AMOUNT`, Standard: `4`)
 * `app.game.group-size` (`ENV_GROUP_SIZE`, Standard: `6`)
 * `app.game.total-rounds` (`ENV_TOTAL_ROUNDS`, Standard: `10`)
@@ -59,32 +59,31 @@ erDiagram
 
     GAME_SESSION {
         UUID id PK
-        VARCHAR name
+        VARCHAR code
         VARCHAR status "LOBBY, RUNNING, FINISHED"
         VARCHAR game_mode "NORMAL, WITH_CONTRACTS"
-        VARCHAR round_phase "CONTRACT_JOIN, CONTRACT_REVIEW, CONTRACT_VOTE, INVESTMENT"
+        VARCHAR round_phase "CONTRACT_JOIN, INVESTMENT"
         INT current_round "0..10"
-        INT target_amount "z.B. 1200 (12 Fr.)"
-        INT total_pot "Kumulierter Klimatopf"
-        BOOLEAN goal_reached
-        BOOLEAN survived_risk
+        INT target_sum_rappen "z.B. 1200 (12 Fr.)"
+        INT total_pot_rappen "Kumulierter Klimatopf"
+        BOOLEAN is_goal_reached
+        BOOLEAN risk_occurred
         BOOLEAN contract_active
-        INT last_voting_round
-        BOOLEAN last_vote_abolished
         TIMESTAMP created_at
     }
 
     PLAYER {
         UUID id PK
         UUID session_id FK
-        VARCHAR pseudonym "z.B. Monsun, Passat"
+        INT player_number "1..6"
         VARCHAR session_token UK
-        INT initial_balance "z.B. 400 (4 Fr.)"
-        INT current_balance "Aktuelles Restguthaben"
+        INT initial_balance_rappen "z.B. 400 (4 Fr.)"
+        INT current_balance_rappen "Aktuelles Restguthaben"
         BOOLEAN in_contract
         BOOLEAN ever_joined_contract
         BOOLEAN left_contract
-        VARCHAR contract_action "NONE, JOIN, DECLINE, STAY, LEAVE, START_VOTE, VOTE_ABOLISH, VOTE_KEEP"
+        INT left_contract_at_round
+        VARCHAR contract_join_choice "YES, CONDITIONAL, NO"
         TIMESTAMP last_seen_at "Für 30s Inaktivitäts-Kick in LOBBY"
     }
 
@@ -134,15 +133,10 @@ stateDiagram-v2
         CheckMode --> CONTRACT_JOIN : gameMode == WITH_CONTRACTS
         CheckMode --> INVESTMENT : gameMode == NORMAL
 
-        CONTRACT_JOIN --> INVESTMENT : Alle Spieler haben Beitritt entschieden
+        CONTRACT_JOIN --> INVESTMENT : Alle 6 Spieler haben gewählt (YES / CONDITIONAL / NO) & Bedingung (>= 3 pot. Mitglieder) ausgewertet
 
-        INVESTMENT --> AdminAdvance : Alle Spieler haben Beitrag gewählt (0 / 0.2 / 0.4 Fr.)
-        AdminAdvance --> CONTRACT_REVIEW : Nächste Runde (2..10) & contractActive (& >= 2 Mitglieder)
-        AdminAdvance --> INVESTMENT : Nächste Runde (2..10) & kein aktives Abkommen
-
-        CONTRACT_REVIEW --> CONTRACT_VOTE : Mind. 1 Mitglied wählt START_VOTE
-        CONTRACT_REVIEW --> INVESTMENT : Alle Mitglieder wählen STAY oder LEAVE (Gebühr 0.2 Fr./Mitglied)
-        CONTRACT_VOTE --> INVESTMENT : Alle Mitglieder haben abgestimmt (>50% schafft Abkommen ab)
+        INVESTMENT --> AdminAdvance : Alle Spieler haben Beitrag gewählt (ab Runde 2 optionaler Austritt vor/nach Investition möglich)
+        AdminAdvance --> INVESTMENT : Nächste Runde (2..10)
     }
 
     RUNNING --> FINISHED : Admin schliesst nach Runde 10 ab (Risiko-Wurf)
@@ -170,10 +164,9 @@ stateDiagram-v2
 | `POST` | `/api/lobby/join` | Tritt einer Session bei (oder stellt bestehende Sitzung via `sessionToken` wieder her). |
 | `POST` | `/api/lobby/leave` | Entfernt den Spieler (`X-Session-Token`) sofort aus einer `LOBBY`-Session. |
 | `GET` | `/api/game/state` | Liefert den vollständigen `GameStateResponse` für den Spieler und aktualisiert `lastSeenAt`. |
-| `POST` | `/api/game/invest` | Speichert den Rundenbeitrag (`0`, `20` oder `40` Rappen) in der Phase `INVESTMENT`. Prüft Mindestbeitrag (`20`), falls `inContract == true`. |
-| `POST` | `/api/game/contract/join` | Vor Runde 1 (`CONTRACT_JOIN`): Beitritt (`join: true/false`) zum Klimaabkommen. |
-| `POST` | `/api/game/contract/review` | Zwischen zwei Runden (`CONTRACT_REVIEW`): Aktion `STAY`, `LEAVE` (inkl. Gebührenüberweisung von `20` Rappen an jedes verbleibende Mitglied) oder `START_VOTE`. |
-| `POST` | `/api/game/contract/vote` | Abstimmung (`CONTRACT_VOTE`): `abolish: true/false`. Einfache Mehrheit (`> 50%`) löst das Abkommen kostenfrei auf. |
+| `POST` | `/api/game/invest` | Speichert den Rundenbeitrag (`0`, `5%` oder `10%`) in der Phase `INVESTMENT`. Prüft Mindestbeitrag (`5%`), falls `inContract == true`. |
+| `POST` | `/api/game/contract/join` | Vor Runde 1 (`CONTRACT_JOIN`): Beitrittsentscheidung (`choice: "YES" \| "CONDITIONAL" \| "NO"`) zum Klimaabkommen. |
+| `POST` | `/api/game/contract/leave` | Ab Runde 2 (`INVESTMENT`): Optionaler, kostenloser Austritt eines aktiven Mitglieds (vor oder nach der Beitragszahlung). |
 | `POST` | `/api/game/survey` | Speichert den Abschluss-Fragebogen (`PlayerSurvey`) nach Spielende (`FINISHED`). |
 
 ### 4.3 Endpunkte für Administratoren (`AdminController`)
@@ -199,8 +192,8 @@ stateDiagram-v2
 * **[`LobbyPage.tsx`](frontend/src/pages/LobbyPage.tsx):** Auswahl offener Sitzungen (mit Kennzeichnung von Variante 1 vs. Variante 2) sowie Warteraum mit direktem `"Raum verlassen"`-Button.
 * **[`GamePage.tsx`](frontend/src/pages/GamePage.tsx):**
   * **Header:** Zeigt Sitzungsname, eigenes Pseudonym, Runde, Klimaziel (`12 Fr.`) und Restguthaben (`Fr.`).
-  * **Aktuelle Aktions-Card (`#FCE8E4`):** Rendert phasengesteuert den Beitritt zum Abkommen (`CONTRACT_JOIN`), die Vertragsprüfung (`CONTRACT_REVIEW`), die Abschaffungsabstimmung (`CONTRACT_VOTE`) oder [`InvestmentControls.tsx`](frontend/src/components/player/InvestmentControls.tsx) (`INVESTMENT`).
-  * **Kompakte Abkommens-Box & 10s-Toast:** Rote Statusbox über den Beitragsbuttons informiert über den eigenen Vertragsstatus; Ergebnisse einer Abschaffungsabstimmung werden für 10 Sekunden eingeblendet und danach automatisch ausgeblendet.
+  * **Aktuelle Aktions-Card (`#FCE8E4`):** Rendert phasengesteuert den Beitritt zum Abkommen ([`ContractPhaseCard.tsx`](frontend/src/components/player/ContractPhaseCard.tsx) in `CONTRACT_JOIN`) oder [`InvestmentButtons.tsx`](frontend/src/components/player/InvestmentButtons.tsx) (`INVESTMENT`, inkl. optionalem Austritts-Link ab Runde 2).
+  * **Kompakte Abkommens-Box & 10s-Toast:** Hinweisbox über den Beitragsbuttons informiert über den eigenen Abkommensstatus (`📜 Im Abkommen: Mindestbeitrag ...`) sowie kurzzeitig (10 Sekunden) über Abkommens-Ereignisse.
   * **[`HistoryTable.tsx`](frontend/src/components/player/HistoryTable.tsx):** Zeigt während des Spiels ausschliesslich die letzte abgeschlossene Runde (`completedRounds.slice(-1)`) ohne Gesamttopf-Summe.
   * **[`PlayerStatusList.tsx`](frontend/src/components/player/PlayerStatusList.tsx):** Unterste Card mit Gruppenstatus und Vertrags-Badges.
   * **[`LocalNotepad.tsx`](frontend/src/components/player/LocalNotepad.tsx):** Schlichter lokaler Notizblock (`localStorage`) ohne ablenkende Zusatzboxen.

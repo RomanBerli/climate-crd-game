@@ -28,7 +28,7 @@ const CONTRACT_JOINED_OPTIONS = [
   'Der feste Mindestbeitrag gab mir Sicherheit und Planbarkeit.',
   'Ich finde es fair, dass alle gleich viel beitragen.',
   'Ich wollte den anderen zeigen, dass ich kooperiere.',
-  'Die Austrittsgebühr sollte mich selbst zum Durchhalten verpflichten.',
+  'Weil mindestens die Hälfte der Gruppe ebenfalls bereit war beizutreten.',
   'OTHER',
 ];
 
@@ -37,7 +37,7 @@ const CONTRACT_NOT_JOINED_OPTIONS = [
   'Ich wollte weniger als den Mindestbeitrag einzahlen.',
   'Ich habe nicht darauf vertraut, dass die anderen sich daran halten.',
   'Ich dachte, die Gruppe erreicht das Ziel auch ohne mich bzw. ohne Abkommen.',
-  'Die Austrittsgebühr war mir zu riskant.',
+  'Es wollten weniger als die Hälfte der Spieler beitreten (Bedingung nicht erfüllt).',
   'Ich wollte auch ohne Abkommen meinen fairen Teil leisten.',
   'Ich habe das Abkommen nicht richtig verstanden.',
   'OTHER',
@@ -47,7 +47,7 @@ const CONTRACT_LEFT_OPTIONS = [
   'Andere haben weniger beigetragen als ich. Das fand ich unfair.',
   'Ich dachte, das Ziel wird sowieso nicht mehr erreicht.',
   'Ich dachte, das Ziel wird auch ohne meinen Beitrag erreicht.',
-  'Ich wollte mehr eigenes Geld behalten. Das war mir die Austrittsgebühr wert.',
+  'Ich wollte mehr eigenes Geld behalten und wieder frei entscheiden können.',
   'Andere sind ausgetreten, deshalb bin ich auch gegangen.',
   'OTHER',
 ];
@@ -55,7 +55,6 @@ const CONTRACT_LEFT_OPTIONS = [
 const CONTRACT_STAYED_OPTIONS = [
   'Ich wollte das Ziel der Gruppe erreichen.',
   'Ich hatte es zugesagt und wollte mich daran halten.',
-  'Ein Austritt hätte sich wegen der Austrittsgebühr nicht gelohnt.',
   'Die anderen haben sich auch daran gehalten.',
   'Ich habe nicht über einen Austritt nachgedacht.',
   'OTHER',

@@ -12,6 +12,7 @@ public record PlayerStateDto(
         boolean inContract,
         boolean everJoinedContract,
         boolean leftContract,
+        String contractJoinChoice,
         Integer currentRoundInvestmentRappen,
         List<Integer> allowedInvestmentOptions,
         Integer finalPayoutRappen

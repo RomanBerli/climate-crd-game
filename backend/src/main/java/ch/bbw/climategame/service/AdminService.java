@@ -185,7 +185,7 @@ public class AdminService {
 
         StringBuilder sb = new StringBuilder();
         sb.append('\uFEFF');
-        sb.append("session_code,game_mode,target_sum_rappen,total_invested_rappen,target_reached,risk_occurred,player_number,player_total_invested_rappen,balance_before_risk_rappen,final_payout_rappen,final_payout_chf,ever_joined_contract,left_contract,in_contract_at_end,left_contract_at_round,contract_abolished,contract_abolished_at_round\n");
+        sb.append("session_code,game_mode,target_sum_rappen,total_invested_rappen,target_reached,risk_occurred,player_number,player_total_invested_rappen,balance_before_risk_rappen,final_payout_rappen,final_payout_chf,contract_join_choice,ever_joined_contract,left_contract,in_contract_at_end,left_contract_at_round\n");
 
         for (Player p : players) {
             int playerTotalInvested = totalInvestedByPlayer.getOrDefault(p.getPlayerNumber(), 0);
@@ -204,12 +204,11 @@ public class AdminService {
                     .append(balanceBeforeRisk).append(',')
                     .append(finalPayoutRappen).append(',')
                     .append(finalPayoutChf).append(',')
+                    .append(p.getContractJoinChoice() != null ? p.getContractJoinChoice() : "").append(',')
                     .append(p.isEverJoinedContract()).append(',')
                     .append(p.isLeftContract()).append(',')
                     .append(p.isInContract()).append(',')
-                    .append(p.getLeftContractAtRound() != null ? p.getLeftContractAtRound() : "").append(',')
-                    .append(session.isContractAbolished()).append(',')
-                    .append(session.getContractAbolishedAtRound() != null ? session.getContractAbolishedAtRound() : "")
+                    .append(p.getLeftContractAtRound() != null ? p.getLeftContractAtRound() : "")
                     .append('\n');
         }
 
@@ -327,7 +326,7 @@ public class AdminService {
         StringBuilder sb = new StringBuilder();
         // UTF-8 BOM für korrekte Umlaute in Microsoft Excel
         sb.append('\uFEFF');
-        sb.append("session_code,game_mode,target_sum_rappen,total_invested_rappen,target_reached,risk_occurred,round,player_number,invested_rappen,invested_chf,submitted_at,currently_in_contract,player_total_invested_rappen,balance_before_risk_rappen,final_payout_rappen,final_payout_chf,ever_joined_contract,left_contract,in_contract_at_end,left_contract_at_round,contract_abolished,contract_abolished_at_round,survey_expected_probability_pct,survey_reaction_unfairness,survey_motivation_ranking,survey_contract_joined_reason,survey_contract_not_joined_reason,survey_contract_left_reason,survey_contract_stayed_reason,survey_age,survey_gender\n");
+        sb.append("session_code,game_mode,target_sum_rappen,total_invested_rappen,target_reached,risk_occurred,round,player_number,invested_rappen,invested_chf,submitted_at,currently_in_contract,player_total_invested_rappen,balance_before_risk_rappen,final_payout_rappen,final_payout_chf,contract_join_choice,ever_joined_contract,left_contract,in_contract_at_end,left_contract_at_round,survey_expected_probability_pct,survey_reaction_unfairness,survey_motivation_ranking,survey_contract_joined_reason,survey_contract_not_joined_reason,survey_contract_left_reason,survey_contract_stayed_reason,survey_age,survey_gender\n");
 
         for (RoundInvestment inv : investments) {
             Player p = playerByNumber.get(inv.getPlayerNumber());
@@ -357,12 +356,11 @@ public class AdminService {
                     .append(balanceBeforeRisk).append(',')
                     .append(finalPayoutRappen).append(',')
                     .append(finalPayoutChf).append(',')
+                    .append(p != null && p.getContractJoinChoice() != null ? p.getContractJoinChoice() : "").append(',')
                     .append(p != null && p.isEverJoinedContract()).append(',')
                     .append(p != null && p.isLeftContract()).append(',')
                     .append(p != null && p.isInContract()).append(',')
                     .append(p != null && p.getLeftContractAtRound() != null ? p.getLeftContractAtRound() : "").append(',')
-                    .append(session.isContractAbolished()).append(',')
-                    .append(session.getContractAbolishedAtRound() != null ? session.getContractAbolishedAtRound() : "").append(',')
                     .append(survey != null ? survey.getExpectedProbabilityPct() : "").append(',')
                     .append(csvEscape(survey != null ? survey.getReactionToUnfairness() : "")).append(',')
                     .append(csvEscape(survey != null ? survey.getMotivationRanking() : "")).append(',')

@@ -1,6 +1,7 @@
 export type SessionStatus = 'LOBBY' | 'RUNNING' | 'FINISHED';
 export type GameMode = 'NORMAL' | 'WITH_CONTRACTS';
 export type RoundPhase = 'CONTRACT_JOIN' | 'CONTRACT_REVIEW' | 'CONTRACT_VOTE' | 'INVESTMENT';
+export type ContractJoinChoice = 'YES' | 'CONDITIONAL' | 'NO';
 
 export interface JoinLobbyResponse {
   sessionId: string;
@@ -28,11 +29,7 @@ export interface ContractStateDto {
   contractAbolished: boolean;
   memberCount: number;
   minInvestmentRappen: number;
-  exitFeePerMemberRappen: number;
-  totalExitFeeForPlayerRappen: number;
-  canAffordExit: boolean;
-  voteAlreadyHeldThisRound: boolean;
-  voteInitiatorPlayerNumber: number | null;
+  canLeaveContractNow: boolean;
   hasDecidedCurrentContractPhase: boolean;
   lastContractEvent: string | null;
 }
@@ -47,6 +44,7 @@ export interface PlayerStateDto {
   inContract: boolean;
   everJoinedContract: boolean;
   leftContract: boolean;
+  contractJoinChoice: ContractJoinChoice | null;
   currentRoundInvestmentRappen: number | null;
   allowedInvestmentOptions: number[];
   finalPayoutRappen: number | null;

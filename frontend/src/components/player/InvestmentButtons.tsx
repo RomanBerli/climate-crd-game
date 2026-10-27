@@ -9,9 +9,11 @@ interface InvestmentButtonsProps {
   submittedAmount: number | null;
   allPlayersReady: boolean;
   inContract?: boolean;
+  canLeaveContract?: boolean;
   minInvestmentRappen?: number;
   lastContractEvent?: string | null;
   onInvest: (amountRappen: number) => Promise<void>;
+  onLeaveContract?: () => Promise<void>;
 }
 
 export const InvestmentButtons: React.FC<InvestmentButtonsProps> = ({
@@ -22,11 +24,14 @@ export const InvestmentButtons: React.FC<InvestmentButtonsProps> = ({
   submittedAmount,
   allPlayersReady,
   inContract = false,
+  canLeaveContract = false,
   minInvestmentRappen = 0,
   lastContractEvent = null,
   onInvest,
+  onLeaveContract,
 }) => {
   const [submittingAmount, setSubmittingAmount] = useState<number | null>(null);
+  const [leavingContract, setLeavingContract] = useState<boolean>(false);
   const [visibleContractEvent, setVisibleContractEvent] = useState<string | null>(lastContractEvent);
 
   useEffect(() => {
@@ -42,12 +47,22 @@ export const InvestmentButtons: React.FC<InvestmentButtonsProps> = ({
   }, [lastContractEvent]);
 
   const handleSelect = async (amount: number) => {
-    if (hasSubmitted || submittingAmount !== null) return;
+    if (hasSubmitted || submittingAmount !== null || leavingContract) return;
     setSubmittingAmount(amount);
     try {
       await onInvest(amount);
     } finally {
       setSubmittingAmount(null);
+    }
+  };
+
+  const handleLeave = async () => {
+    if (!onLeaveContract || leavingContract || submittingAmount !== null) return;
+    setLeavingContract(true);
+    try {
+      await onLeaveContract();
+    } finally {
+      setLeavingContract(false);
     }
   };
 
@@ -115,7 +130,7 @@ export const InvestmentButtons: React.FC<InvestmentButtonsProps> = ({
                 key={amount}
                 type="button"
                 className={`invest-btn invest-btn--${amount}`}
-                disabled={!isAllowed || submittingAmount !== null}
+                disabled={!isAllowed || submittingAmount !== null || leavingContract}
                 onClick={() => handleSelect(amount)}
               >
                 <span className="invest-btn__amount">{formatFr(amount)}</span>
@@ -130,6 +145,34 @@ export const InvestmentButtons: React.FC<InvestmentButtonsProps> = ({
               </button>
             );
           })}
+        </div>
+      )}
+
+      {inContract && canLeaveContract && onLeaveContract && (
+        <div
+          style={{
+            marginTop: '0.75rem',
+            display: 'flex',
+            justifyContent: 'flex-end',
+          }}
+        >
+          <button
+            type="button"
+            disabled={leavingContract || submittingAmount !== null}
+            onClick={handleLeave}
+            style={{
+              background: 'none',
+              border: 'none',
+              padding: '0.2rem 0.35rem',
+              fontSize: '0.78rem',
+              color: 'var(--text-secondary)',
+              textDecoration: 'underline',
+              cursor: 'pointer',
+              opacity: 0.65,
+            }}
+          >
+            {leavingContract ? 'Wird verarbeitet...' : 'Aus dem Abkommen austreten'}
+          </button>
         </div>
       )}
     </section>
