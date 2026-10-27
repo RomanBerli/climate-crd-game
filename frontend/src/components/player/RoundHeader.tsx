@@ -1,5 +1,6 @@
 import React from 'react';
 import { GameStateResponse } from '../../types/game';
+import { formatFr } from '../../utils/currency';
 
 interface RoundHeaderProps {
   gameState: GameStateResponse;
@@ -8,9 +9,10 @@ interface RoundHeaderProps {
 export const RoundHeader: React.FC<RoundHeaderProps> = ({ gameState }) => {
   const {
     sessionCode,
+    gameMode,
+    contractState,
     currentRound,
     totalRounds,
-    riskPercent,
     targetSumRappen,
     player,
   } = gameState;
@@ -20,9 +22,17 @@ export const RoundHeader: React.FC<RoundHeaderProps> = ({ gameState }) => {
       <div className="round-header__identity">
         <span className="badge badge--accent">Spieler {player.playerNumber}</span>
         <span className="badge badge--neutral">Raum {sessionCode}</span>
-        <span className="badge badge--risk" title="Wahrscheinlichkeit des Totalverlusts bei Verfehlen des Klimaziels">
-          Risiko-Treatment: {riskPercent}%
-        </span>
+        {gameMode === 'WITH_CONTRACTS' && (
+          <span className="badge badge--risk">
+            {player.inContract
+              ? `📜 Im Abkommen (${contractState.memberCount} Mitgl.)`
+              : contractState.contractAbolished
+              ? 'Abkommen aufgelöst'
+              : player.leftContract
+              ? 'Aus Abkommen ausgetreten'
+              : 'Ohne Abkommen'}
+          </span>
+        )}
       </div>
 
       <div className="round-header__round">
@@ -34,13 +44,13 @@ export const RoundHeader: React.FC<RoundHeaderProps> = ({ gameState }) => {
 
       <div className="round-header__metrics">
         <div className="metric-box">
-          <span className="metric-box__label">Gruppenziel (nach {totalRounds} Runden)</span>
-          <strong className="metric-box__value">{targetSumRappen} Rappen</strong>
+          <span className="metric-box__label">Gruppen-Klimaziel (10 Runden)</span>
+          <strong className="metric-box__value">{formatFr(targetSumRappen)}</strong>
         </div>
         <div className="metric-box metric-box--highlight">
           <span className="metric-box__label">Ihr aktuelles Restguthaben</span>
           <strong className="metric-box__value metric-box__value--balance">
-            {player.currentBalanceRappen} Rappen
+            {formatFr(player.currentBalanceRappen)}
           </strong>
         </div>
       </div>

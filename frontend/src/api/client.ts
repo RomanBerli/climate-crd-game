@@ -1,5 +1,5 @@
 const PLAYER_TOKEN_STORAGE_KEY = 'climate_player_token';
-const ADMIN_SECRET_STORAGE_KEY = 'climate_admin_secret';
+const ADMIN_SECRET_STORAGE_KEY = 'climate_admin_secret_session';
 
 export class ApiError extends Error {
   status: number;
@@ -33,15 +33,19 @@ export function setStoredPlayerToken(token: string | null): void {
 
 export function getStoredAdminSecret(): string {
   try {
-    return localStorage.getItem(ADMIN_SECRET_STORAGE_KEY) || 'admin_geheim_123';
+    return sessionStorage.getItem(ADMIN_SECRET_STORAGE_KEY) || '';
   } catch {
-    return 'admin_geheim_123';
+    return '';
   }
 }
 
-export function setStoredAdminSecret(secret: string): void {
+export function setStoredAdminSecret(secret: string | null): void {
   try {
-    localStorage.setItem(ADMIN_SECRET_STORAGE_KEY, secret);
+    if (secret && secret.trim().length > 0) {
+      sessionStorage.setItem(ADMIN_SECRET_STORAGE_KEY, secret.trim());
+    } else {
+      sessionStorage.removeItem(ADMIN_SECRET_STORAGE_KEY);
+    }
   } catch {
     // ignore
   }

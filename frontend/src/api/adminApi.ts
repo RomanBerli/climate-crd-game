@@ -1,5 +1,7 @@
 import { apiRequest, getStoredAdminSecret } from './client';
-import { AdminSessionResponse } from '../types/game';
+import { AdminSessionResponse, GameMode } from '../types/game';
+
+export type CsvExportType = 'round_info' | 'invest' | 'survey' | 'payout' | 'all';
 
 function adminHeaders(customKey?: string): Record<string, string> {
   return {
@@ -15,12 +17,12 @@ export async function fetchAdminSessionById(sessionId: string, adminKey?: string
   return apiRequest<AdminSessionResponse>(`/api/admin/sessions/${sessionId}`, { method: 'GET' }, adminHeaders(adminKey));
 }
 
-export async function createAdminSession(riskLevel: number, adminKey?: string): Promise<AdminSessionResponse> {
+export async function createAdminSession(gameMode: GameMode = 'NORMAL', adminKey?: string): Promise<AdminSessionResponse> {
   return apiRequest<AdminSessionResponse>(
     '/api/admin/sessions',
     {
       method: 'POST',
-      body: JSON.stringify({ riskLevel }),
+      body: JSON.stringify({ gameMode }),
     },
     adminHeaders(adminKey)
   );
@@ -34,25 +36,22 @@ export async function startAdminSession(sessionId: string, adminKey?: string): P
   );
 }
 
-export async function pauseAdminSession(sessionId: string, adminKey?: string): Promise<AdminSessionResponse> {
+export async function advanceAdminRound(sessionId: string, adminKey?: string): Promise<AdminSessionResponse> {
   return apiRequest<AdminSessionResponse>(
-    `/api/admin/sessions/${sessionId}/pause`,
+    `/api/admin/sessions/${sessionId}/next-round`,
     { method: 'POST' },
     adminHeaders(adminKey)
   );
 }
 
-export async function resumeAdminSession(sessionId: string, adminKey?: string): Promise<AdminSessionResponse> {
-  return apiRequest<AdminSessionResponse>(
-    `/api/admin/sessions/${sessionId}/resume`,
-    { method: 'POST' },
-    adminHeaders(adminKey)
-  );
-}
-
-export async function downloadSessionCsv(sessionId: string, sessionCode: string, adminKey?: string): Promise<void> {
+export async function downloadSessionCsv(
+  sessionId: string,
+  sessionCode: string,
+  exportType: CsvExportType = 'all',
+  adminKey?: string
+): Promise<void> {
   const key = adminKey ?? getStoredAdminSecret();
-  const response = await fetch(`/api/admin/sessions/${sessionId}/export.csv`, {
+  const response = await fetch(`/api/admin/sessions/${sessionId}/export.csv?type=${encodeURIComponent(exportType)}`, {
     method: 'GET',
     headers: {
       'X-Admin-Key': key,
@@ -67,7 +66,7 @@ export async function downloadSessionCsv(sessionId: string, sessionCode: string,
   const url = window.URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.setAttribute('download', `milinski_session_${sessionCode}.csv`);
+  link.setAttribute('download', `milinski_session_${sessionCode}_${exportType}.csv`);
   document.body.appendChild(link);
   link.click();
   link.remove();

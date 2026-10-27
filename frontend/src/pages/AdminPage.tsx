@@ -1,14 +1,15 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+  advanceAdminRound,
   createAdminSession,
-  pauseAdminSession,
-  resumeAdminSession,
+  fetchAdminSessions,
   startAdminSession,
 } from '../api/adminApi';
 import { getStoredAdminSecret, setStoredAdminSecret } from '../api/client';
 import { useAdminPolling } from '../hooks/useAdminPolling';
 import { CreateSessionModal } from '../components/admin/CreateSessionModal';
 import { LiveSessionCard } from '../components/admin/LiveSessionCard';
+import { GameMode } from '../types/game';
 
 interface AdminPageProps {
   onBackToPlayerView: () => void;
@@ -16,18 +17,67 @@ interface AdminPageProps {
 
 export const AdminPage: React.FC<AdminPageProps> = ({ onBackToPlayerView }) => {
   const [adminKey, setAdminKey] = useState<string>(() => getStoredAdminSecret());
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => getStoredAdminSecret().length > 0);
+  const [loginInput, setLoginInput] = useState<string>('');
+  const [loginLoading, setLoginLoading] = useState<boolean>(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const { sessions, loading, error, refreshSessions } = useAdminPolling(adminKey, true);
 
-  const handleKeyChange = (val: string) => {
-    setAdminKey(val);
-    setStoredAdminSecret(val);
+  const {
+    sessions,
+    loading,
+    error,
+    unauthorized,
+    refreshSessions,
+  } = useAdminPolling(adminKey, isAuthenticated);
+
+  useEffect(() => {
+    if (unauthorized) {
+      setStoredAdminSecret(null);
+      setAdminKey('');
+      setIsAuthenticated(false);
+      setLoginError('Sitzung abgelaufen oder ungültiges Admin-Secret. Bitte erneut anmelden.');
+    }
+  }, [unauthorized]);
+
+  const handleLoginSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const candidate = loginInput.trim();
+    if (!candidate) {
+      setLoginError('Bitte das Admin-Secret eingeben.');
+      return;
+    }
+
+    setLoginLoading(true);
+    setLoginError(null);
+    try {
+      await fetchAdminSessions(candidate);
+      setStoredAdminSecret(candidate);
+      setAdminKey(candidate);
+      setIsAuthenticated(true);
+      setLoginInput('');
+    } catch (err) {
+      setStoredAdminSecret(null);
+      setIsAuthenticated(false);
+      setLoginError(
+        err instanceof Error ? err.message : 'Authentifizierung fehlgeschlagen.'
+      );
+    } finally {
+      setLoginLoading(false);
+    }
   };
 
-  const handleCreateSession = async (riskLevel: number) => {
+  const handleLogout = () => {
+    setStoredAdminSecret(null);
+    setAdminKey('');
+    setIsAuthenticated(false);
+    setLoginInput('');
+  };
+
+  const handleCreateSession = async (gameMode: GameMode) => {
     setActionError(null);
     try {
-      await createAdminSession(riskLevel, adminKey);
+      await createAdminSession(gameMode, adminKey);
       await refreshSessions();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Fehler beim Erstellen der Session.');
@@ -44,25 +94,64 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBackToPlayerView }) => {
     }
   };
 
-  const handlePause = async (sessionId: string) => {
+  const handleAdvanceRound = async (sessionId: string) => {
     setActionError(null);
     try {
-      await pauseAdminSession(sessionId, adminKey);
+      await advanceAdminRound(sessionId, adminKey);
       await refreshSessions();
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Fehler beim Pausieren.');
+      setActionError(err instanceof Error ? err.message : 'Fehler beim Weiterschalten der Runde.');
     }
   };
 
-  const handleResume = async (sessionId: string) => {
-    setActionError(null);
-    try {
-      await resumeAdminSession(sessionId, adminKey);
-      await refreshSessions();
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Fehler beim Fortsetzen.');
-    }
-  };
+  if (!isAuthenticated) {
+    return (
+      <main className="page-container page-container--centered">
+        <div className="lobby-login-card">
+          <div className="lobby-login-card__header">
+            <span className="badge badge--accent">Versuchsleiter-Authentifizierung</span>
+            <h1>Admin-Dashboard Login</h1>
+            <p>
+              Der Zugriff auf das Versuchsleiter-Cockpit ist geschützt. Bitte geben Sie das konfigurierte{' '}
+              <code>APP_ADMIN_SECRET</code> ein.
+            </p>
+          </div>
+
+          <form onSubmit={handleLoginSubmit} className="lobby-form">
+            <label htmlFor="adminSecretLoginInput" className="lobby-form__label">
+              Admin-Secret
+            </label>
+            <input
+              id="adminSecretLoginInput"
+              type="password"
+              value={loginInput}
+              onChange={(e) => setLoginInput(e.target.value)}
+              placeholder="Admin-Passwort eingeben..."
+              className="lobby-form__input"
+              style={{ fontSize: '1.25rem', letterSpacing: 'normal' }}
+              autoFocus
+            />
+
+            {loginError && <div className="alert alert--error">{loginError}</div>}
+
+            <button
+              type="submit"
+              className="btn btn--primary btn--large"
+              disabled={loginLoading}
+            >
+              {loginLoading ? 'Prüfe Berechtigung...' : 'Anmelden →'}
+            </button>
+          </form>
+
+          <div className="lobby-login-card__admin-link">
+            <button type="button" className="btn btn--ghost" onClick={onBackToPlayerView}>
+              ← Zurück zur Spieler-Ansicht
+            </button>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="page-container">
@@ -72,16 +161,9 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBackToPlayerView }) => {
           <h1>Milinski Collective-Risk Game – Admin-Dashboard</h1>
         </div>
         <div className="admin-header__controls">
-          <div className="admin-key-box">
-            <label htmlFor="adminKeyInput">Admin-Schlüssel (X-Admin-Key):</label>
-            <input
-              id="adminKeyInput"
-              type="password"
-              value={adminKey}
-              onChange={(e) => handleKeyChange(e.target.value)}
-              placeholder="admin_geheim_123"
-            />
-          </div>
+          <button type="button" className="btn btn--ghost" onClick={handleLogout}>
+            Abmelden
+          </button>
           <button type="button" className="btn btn--secondary" onClick={onBackToPlayerView}>
             ← Zur Spieler-Ansicht
           </button>
@@ -111,8 +193,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBackToPlayerView }) => {
               session={session}
               adminKey={adminKey}
               onStart={handleStart}
-              onPause={handlePause}
-              onResume={handleResume}
+              onAdvanceRound={handleAdvanceRound}
             />
           ))
         )}

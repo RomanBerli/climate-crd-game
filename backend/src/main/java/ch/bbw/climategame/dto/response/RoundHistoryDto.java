@@ -4,6 +4,7 @@ import java.util.List;
 
 public record RoundHistoryDto(
         int round,
+        int roundTotalRappen,
         List<PlayerInvestmentDto> investments
 ) {
     public record PlayerInvestmentDto(

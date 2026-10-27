@@ -1,29 +1,34 @@
 package ch.bbw.climategame.service;
 
-import ch.bbw.climategame.config.AppProperties;
+import ch.bbw.climategame.dto.request.SubmitSurveyRequest;
+import ch.bbw.climategame.dto.response.ContractStateDto;
 import ch.bbw.climategame.dto.response.EndgameResultDto;
 import ch.bbw.climategame.dto.response.GameStateResponse;
 import ch.bbw.climategame.dto.response.JoinLobbyResponse;
 import ch.bbw.climategame.dto.response.PlayerSlotStatusDto;
 import ch.bbw.climategame.dto.response.PlayerStateDto;
 import ch.bbw.climategame.dto.response.RoundHistoryDto;
+import ch.bbw.climategame.entity.GameMode;
 import ch.bbw.climategame.entity.GameSession;
 import ch.bbw.climategame.entity.Player;
+import ch.bbw.climategame.entity.PlayerSurvey;
 import ch.bbw.climategame.entity.RoundInvestment;
 import ch.bbw.climategame.entity.RoundPhase;
 import ch.bbw.climategame.entity.SessionStatus;
 import ch.bbw.climategame.repository.GameSessionRepository;
 import ch.bbw.climategame.repository.PlayerRepository;
+import ch.bbw.climategame.repository.PlayerSurveyRepository;
 import ch.bbw.climategame.repository.RoundInvestmentRepository;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.time.Duration;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -34,28 +39,102 @@ import java.util.stream.Collectors;
 @Service
 public class GameEngineService {
 
+    public static final long INACTIVE_TIMEOUT_SECONDS = 30L;
+
     private final GameSessionRepository sessionRepository;
     private final PlayerRepository playerRepository;
     private final RoundInvestmentRepository investmentRepository;
+    private final PlayerSurveyRepository surveyRepository;
     private final PayoutService payoutService;
-    private final AppProperties appProperties;
+
+    private final double startAmountChf;
+    private final int groupSize;
+    private final int totalRounds;
+    private final BigDecimal riskLevel;
 
     public GameEngineService(
             GameSessionRepository sessionRepository,
             PlayerRepository playerRepository,
             RoundInvestmentRepository investmentRepository,
+            PlayerSurveyRepository surveyRepository,
             PayoutService payoutService,
-            AppProperties appProperties
+            @Value("${app.game.start-amount-chf}") double startAmountChf,
+            @Value("${app.game.group-size}") int groupSize,
+            @Value("${app.game.total-rounds}") int totalRounds,
+            @Value("${app.game.risk-level}") BigDecimal riskLevel
     ) {
         this.sessionRepository = sessionRepository;
         this.playerRepository = playerRepository;
         this.investmentRepository = investmentRepository;
+        this.surveyRepository = surveyRepository;
         this.payoutService = payoutService;
-        this.appProperties = appProperties;
+        this.startAmountChf = startAmountChf;
+        this.groupSize = groupSize;
+        this.totalRounds = totalRounds;
+        this.riskLevel = riskLevel;
+    }
+
+    public int getGroupSize() {
+        return groupSize;
+    }
+
+    public int getTotalRounds() {
+        return totalRounds;
+    }
+
+    public BigDecimal getRiskLevel() {
+        return riskLevel;
+    }
+
+    public int getStartAmountRappen() {
+        return (int) Math.round(startAmountChf * 100.0);
+    }
+
+    public int getTargetSumRappen() {
+        return (getStartAmountRappen() / 2) * groupSize;
+    }
+
+    public List<Integer> getAllowedInvestmentOptions() {
+        int startRappen = getStartAmountRappen();
+        return List.of(
+                0,
+                (int) Math.round(startRappen * 0.05),
+                (int) Math.round(startRappen * 0.10)
+        );
+    }
+
+    @Scheduled(fixedRate = 5000)
+    @Transactional
+    public void kickInactivePlayers() {
+        Instant cutoff = Instant.now().minusSeconds(INACTIVE_TIMEOUT_SECONDS);
+        playerRepository.deleteInactiveLobbyPlayers(cutoff);
+    }
+
+    @Transactional
+    public void leaveLobby(String sessionToken) {
+        if (sessionToken == null || sessionToken.isBlank()) {
+            return;
+        }
+        Optional<Player> existingPlayer = playerRepository.findBySessionToken(sessionToken.trim());
+        if (existingPlayer.isEmpty()) {
+            return;
+        }
+        Player player = existingPlayer.get();
+        GameSession session = player.getSession();
+        if (session.getStatus() == SessionStatus.LOBBY) {
+            playerRepository.deletePlayerById(player.getId());
+        } else {
+            // Nach Spielstart/Spielende bleiben die Spielerdaten für den CSV-Export erhalten,
+            // aber das Token wird invalidiert, damit der Browser ausgeloggt ist.
+            player.setSessionToken("left-" + UUID.randomUUID());
+            playerRepository.save(player);
+        }
     }
 
     @Transactional
     public JoinLobbyResponse joinLobby(String rawCode, String existingToken) {
+        kickInactivePlayers();
+
         String cleanCode = rawCode == null ? "" : rawCode.trim().toUpperCase();
         GameSession session = sessionRepository.findByCodeForUpdate(cleanCode)
                 .orElseThrow(() -> new ResponseStatusException(
@@ -82,7 +161,6 @@ public class GameEngineService {
         }
 
         List<Player> currentPlayers = playerRepository.findBySessionIdOrderByPlayerNumberAsc(session.getId());
-        int groupSize = appProperties.getGame().getGroupSize();
         if (currentPlayers.size() >= groupSize) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
@@ -99,7 +177,7 @@ public class GameEngineService {
             nextPlayerNumber++;
         }
 
-        int initialBalanceRappen = appProperties.getGame().getStartAmountRappen();
+        int initialBalanceRappen = getStartAmountRappen();
         Player newPlayer = new Player();
         newPlayer.setSession(session);
         newPlayer.setPlayerNumber(nextPlayerNumber);
@@ -120,6 +198,8 @@ public class GameEngineService {
 
     @Transactional
     public GameStateResponse getPlayerGameState(String sessionToken) {
+        kickInactivePlayers();
+
         if (sessionToken == null || sessionToken.isBlank()) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Kein gültiges Spieler-Token vorhanden.");
         }
@@ -141,6 +221,150 @@ public class GameEngineService {
     }
 
     @Transactional
+    public GameStateResponse submitContractJoin(String sessionToken, boolean join) {
+        return submitContractJoin(sessionToken, join ? "YES" : "NO");
+    }
+
+    @Transactional
+    public GameStateResponse submitContractJoin(String sessionToken, String rawChoice) {
+        if (sessionToken == null || sessionToken.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Kein gültiges Spieler-Token vorhanden.");
+        }
+
+        String choice = rawChoice == null ? "" : rawChoice.trim().toUpperCase();
+        if (!Set.of("YES", "CONDITIONAL", "NO").contains(choice)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ungültige Beitritts-Option: " + rawChoice);
+        }
+
+        Player tokenPlayer = playerRepository.findBySessionToken(sessionToken)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Spieler-Sitzung ungültig."));
+
+        GameSession session = sessionRepository.findByIdForUpdate(tokenPlayer.getSession().getId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session nicht gefunden."));
+
+        if (session.getStatus() != SessionStatus.RUNNING || session.getRoundPhase() != RoundPhase.CONTRACT_JOIN) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Die Beitrittsphase zum Abkommen ist nicht aktiv.");
+        }
+
+        if (tokenPlayer.isContractJoinDecided()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Sie haben bereits über den Beitritt zum Abkommen entschieden.");
+        }
+
+        tokenPlayer.setContractJoinDecided(true);
+        tokenPlayer.setContractJoinChoice(choice);
+        tokenPlayer.setInContract("YES".equals(choice));
+        tokenPlayer.setEverJoinedContract("YES".equals(choice));
+        tokenPlayer.setLastSeenAt(Instant.now());
+        playerRepository.save(tokenPlayer);
+
+        List<Player> allPlayers = playerRepository.findBySessionIdOrderByPlayerNumberAsc(session.getId());
+        long decidedCount = allPlayers.stream().filter(Player::isContractJoinDecided).count();
+
+        if (decidedCount >= groupSize) {
+            long potentialMembers = allPlayers.stream()
+                    .filter(p -> "YES".equals(p.getContractJoinChoice()) || "CONDITIONAL".equals(p.getContractJoinChoice()))
+                    .count();
+            long conditionalCount = allPlayers.stream()
+                    .filter(p -> "CONDITIONAL".equals(p.getContractJoinChoice()))
+                    .count();
+            int minHalf = (groupSize + 1) / 2;
+            boolean conditionalFulfilled = potentialMembers >= minHalf;
+
+            for (Player p : allPlayers) {
+                String c = p.getContractJoinChoice();
+                boolean joined = "YES".equals(c) || ("CONDITIONAL".equals(c) && conditionalFulfilled);
+                p.setInContract(joined);
+                p.setEverJoinedContract(joined);
+            }
+            playerRepository.saveAll(allPlayers);
+
+            long memberCount = allPlayers.stream().filter(Player::isInContract).count();
+            if (memberCount > 0) {
+                session.setContractActive(true);
+                if (!conditionalFulfilled && conditionalCount > 0) {
+                    session.setLastContractEvent(
+                            memberCount + " von " + groupSize + " Spielern sind im Abkommen (Bedingung ≥ " + minHalf + " wurde nicht erreicht)."
+                    );
+                } else {
+                    session.setLastContractEvent(
+                            memberCount + " von " + groupSize + " Spielern sind dem Abkommen beigetreten."
+                    );
+                }
+            } else {
+                session.setContractActive(false);
+                if (!conditionalFulfilled && conditionalCount > 0) {
+                    session.setLastContractEvent(
+                            "Kein Spieler ist im Abkommen (weniger als " + minHalf + " potenzielle Mitglieder). Es gilt kein Mindestbeitrag."
+                    );
+                } else {
+                    session.setLastContractEvent("Kein Spieler ist dem Abkommen beigetreten. Es gilt kein Mindestbeitrag.");
+                }
+            }
+            session.setRoundPhase(RoundPhase.INVESTMENT);
+            session.setRoundStartTime(Instant.now());
+            sessionRepository.save(session);
+        }
+
+        Player updatedPlayer = allPlayers.stream()
+                .filter(p -> p.getPlayerNumber() == tokenPlayer.getPlayerNumber())
+                .findFirst()
+                .orElse(tokenPlayer);
+        List<RoundInvestment> allInvestments = investmentRepository.findBySessionIdOrderByRoundNumberAscPlayerNumberAsc(session.getId());
+        return buildGameStateResponse(session, updatedPlayer, allPlayers, allInvestments);
+    }
+
+    @Transactional
+    public GameStateResponse leaveContract(String sessionToken) {
+        if (sessionToken == null || sessionToken.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Kein gültiges Spieler-Token vorhanden.");
+        }
+
+        Player tokenPlayer = playerRepository.findBySessionToken(sessionToken)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Spieler-Sitzung ungültig."));
+
+        GameSession session = sessionRepository.findByIdForUpdate(tokenPlayer.getSession().getId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session nicht gefunden."));
+
+        if (session.getStatus() != SessionStatus.RUNNING || session.getRoundPhase() != RoundPhase.INVESTMENT) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Ein Austritt ist nur während einer laufenden Spielrunde möglich.");
+        }
+
+        if (!tokenPlayer.isInContract()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Sie sind aktuell kein Mitglied des Abkommens.");
+        }
+
+        int currentRound = session.getCurrentRound();
+        if (currentRound < 2) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Mitglieder dürfen das Abkommen erst nach der ersten Runde (ab Runde 2) verlassen."
+            );
+        }
+
+        tokenPlayer.setInContract(false);
+        tokenPlayer.setLeftContract(true);
+        tokenPlayer.setLeftContractAtRound(currentRound);
+        tokenPlayer.setLastSeenAt(Instant.now());
+        playerRepository.save(tokenPlayer);
+
+        List<Player> allPlayers = playerRepository.findBySessionIdOrderByPlayerNumberAsc(session.getId());
+        long remainingMembers = allPlayers.stream().filter(Player::isInContract).count();
+        if (remainingMembers == 0) {
+            session.setContractActive(false);
+        }
+        session.setLastContractEvent("Spieler " + tokenPlayer.getPlayerNumber() + " hat das Abkommen verlassen.");
+        sessionRepository.save(session);
+
+        List<RoundInvestment> allInvestments = investmentRepository.findBySessionIdOrderByRoundNumberAscPlayerNumberAsc(session.getId());
+        Player updatedPlayer = allPlayers.stream()
+                .filter(p -> p.getPlayerNumber() == tokenPlayer.getPlayerNumber())
+                .findFirst()
+                .orElse(tokenPlayer);
+
+        return buildGameStateResponse(session, updatedPlayer, allPlayers, allInvestments);
+    }
+
+    @Transactional
     public GameStateResponse submitInvestment(String sessionToken, int amountRappen) {
         if (sessionToken == null || sessionToken.isBlank()) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Kein gültiges Spieler-Token vorhanden.");
@@ -152,11 +376,8 @@ public class GameEngineService {
         GameSession session = sessionRepository.findByIdForUpdate(tokenPlayer.getSession().getId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session nicht gefunden."));
 
-        if (session.getStatus() == SessionStatus.PAUSED) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Das Spiel ist derzeit durch den Versuchsleiter pausiert.");
-        }
-        if (session.getStatus() != SessionStatus.RUNNING) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Investitionen sind nur während einer aktiven Runde möglich.");
+        if (session.getStatus() != SessionStatus.RUNNING || session.getRoundPhase() != RoundPhase.INVESTMENT) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Investitionen sind erst möglich, sobald die Einzahlungsphase der Runde aktiv ist.");
         }
 
         int currentRound = session.getCurrentRound();
@@ -164,29 +385,32 @@ public class GameEngineService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Sie haben in Runde " + currentRound + " bereits investiert.");
         }
 
-        List<Integer> allowedOptions = appProperties.getGame().getAllowedInvestmentOptions();
+        List<Integer> allowedOptions = getAllowedInvestmentOptions();
         if (!allowedOptions.contains(amountRappen)) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Ungültiger Investitionsbetrag: " + amountRappen + " Rappen. Erlaubt sind: " + allowedOptions
+                    "Ungültiger Investitionsbetrag."
+            );
+        }
+
+        int minRequiredRappen = getMinimumRequiredInvestmentRappen(session, tokenPlayer);
+        if (amountRappen < minRequiredRappen) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Als Mitglied des Abkommens müssen Sie mindestens den vorgeschriebenen Mindestbeitrag pro Runde investieren."
             );
         }
 
         if (tokenPlayer.getCurrentBalanceRappen() < amountRappen) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Nicht genügend Guthaben (" + tokenPlayer.getCurrentBalanceRappen() + " Rappen verfügbar)."
+                    "Nicht genügend Guthaben verfügbar."
             );
         }
 
-        recordInvestmentInternal(session, tokenPlayer, currentRound, amountRappen, false);
+        recordInvestmentInternal(session, tokenPlayer, currentRound, amountRappen);
 
-        int groupSize = appProperties.getGame().getGroupSize();
-        int submittedCount = investmentRepository.countBySessionIdAndRoundNumber(session.getId(), currentRound);
-        if (submittedCount >= groupSize) {
-            advanceRoundOrFinish(session);
-        }
-
+        // Kein automatischer Rundenwechsel: Der Admin klickt die Runde im Dashboard weiter, sobald alle 6 Spieler gewählt haben.
         List<Player> allPlayers = playerRepository.findBySessionIdOrderByPlayerNumberAsc(session.getId());
         List<RoundInvestment> allInvestments = investmentRepository.findBySessionIdOrderByRoundNumberAscPlayerNumberAsc(session.getId());
         Player updatedPlayer = allPlayers.stream()
@@ -198,94 +422,66 @@ public class GameEngineService {
     }
 
     @Transactional
-    public void processSessionTimerTick(UUID sessionId) {
-        Optional<GameSession> sessionOpt = sessionRepository.findByIdForUpdate(sessionId);
-        if (sessionOpt.isEmpty()) {
-            return;
-        }
-        GameSession session = sessionOpt.get();
-        if (session.getStatus() != SessionStatus.RUNNING || session.getRoundDeadline() == null) {
-            return;
+    public GameStateResponse submitSurvey(String sessionToken, SubmitSurveyRequest request) {
+        if (sessionToken == null || sessionToken.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Kein gültiges Spieler-Token vorhanden.");
         }
 
-        Instant now = Instant.now();
-        int currentRound = session.getCurrentRound();
-        int groupSize = appProperties.getGame().getGroupSize();
+        Player tokenPlayer = playerRepository.findBySessionToken(sessionToken)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Spieler-Sitzung ungültig."));
 
-        // Falls bereits alle Spieler gewählt haben, sofort weiter
-        int submittedCount = investmentRepository.countBySessionIdAndRoundNumber(session.getId(), currentRound);
-        if (submittedCount >= groupSize) {
-            advanceRoundOrFinish(session);
-            return;
+        GameSession session = sessionRepository.findByIdForUpdate(tokenPlayer.getSession().getId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session nicht gefunden."));
+
+        if (session.getStatus() != SessionStatus.FINISHED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Der Fragebogen kann erst nach Abschluss der 10 Runden ausgefüllt werden.");
         }
 
-        if (now.isBefore(session.getRoundDeadline())) {
-            return;
+        if (surveyRepository.existsBySessionIdAndPlayerNumber(session.getId(), tokenPlayer.getPlayerNumber())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Sie haben den Fragebogen bereits abgeschickt.");
         }
 
-        if (session.getRoundPhase() == RoundPhase.REGULAR) {
-            // Übergang von 60s Regular Phase in 30s Overtime Phase
-            session.setRoundPhase(RoundPhase.OVERTIME);
-            session.setRoundDeadline(now.plusSeconds(appProperties.getGame().getOvertimePhaseSeconds()));
-            sessionRepository.save(session);
-        } else {
-            // 30s Overtime Phase abgelaufen -> Auto-Bet (20 Rappen / INVEST_OPTION_1) für alle fehlenden Spieler
-            List<Player> players = playerRepository.findBySessionIdOrderByPlayerNumberAsc(session.getId());
-            List<RoundInvestment> roundInvestments = investmentRepository
-                    .findBySessionIdAndRoundNumberOrderByPlayerNumberAsc(session.getId(), currentRound);
-            Set<Integer> submittedPlayerNumbers = roundInvestments.stream()
-                    .map(RoundInvestment::getPlayerNumber)
-                    .collect(Collectors.toSet());
+        String formattedRanking = formatRankingList(request.motivationRanking());
 
-            int autoBetAmount = appProperties.getGame().getInvestOption1Rappen();
-            for (Player player : players) {
-                if (!submittedPlayerNumbers.contains(player.getPlayerNumber())) {
-                    int actualAutoBet = Math.min(autoBetAmount, player.getCurrentBalanceRappen());
-                    recordInvestmentInternal(session, player, currentRound, actualAutoBet, true);
-                }
-            }
+        PlayerSurvey survey = new PlayerSurvey();
+        survey.setSession(session);
+        survey.setPlayer(tokenPlayer);
+        survey.setPlayerNumber(tokenPlayer.getPlayerNumber());
+        survey.setExpectedProbabilityPct(request.expectedProbabilityPct());
+        survey.setReactionToUnfairness(request.reactionToUnfairness().trim());
+        survey.setMotivationRanking(formattedRanking);
+        survey.setContractJoinedReason(cleanNullable(request.contractJoinedReason()));
+        survey.setContractNotJoinedReason(cleanNullable(request.contractNotJoinedReason()));
+        survey.setContractLeftReason(cleanNullable(request.contractLeftReason()));
+        survey.setContractStayedReason(cleanNullable(request.contractStayedReason()));
+        survey.setAge(request.age());
+        survey.setGender(request.gender().trim());
+        survey.setTwintPhone(request.twintPhone().trim());
 
-            advanceRoundOrFinish(session);
-        }
+        surveyRepository.save(survey);
+
+        tokenPlayer.setLastSeenAt(Instant.now());
+        playerRepository.save(tokenPlayer);
+
+        List<Player> allPlayers = playerRepository.findBySessionIdOrderByPlayerNumberAsc(session.getId());
+        List<RoundInvestment> allInvestments = investmentRepository.findBySessionIdOrderByRoundNumberAscPlayerNumberAsc(session.getId());
+
+        return buildGameStateResponse(session, tokenPlayer, allPlayers, allInvestments);
     }
 
-    private void recordInvestmentInternal(
-            GameSession session,
-            Player player,
-            int roundNumber,
-            int amountRappen,
-            boolean isAutoBet
-    ) {
-        RoundInvestment investment = new RoundInvestment();
-        investment.setSession(session);
-        investment.setPlayer(player);
-        investment.setRoundNumber(roundNumber);
-        investment.setPlayerNumber(player.getPlayerNumber());
-        investment.setAmountRappen(amountRappen);
-        investment.setAutoBet(isAutoBet);
-        investmentRepository.save(investment);
+    @Transactional
+    public void advanceRoundOrFinish(GameSession session) {
+        List<Player> allPlayers = playerRepository.findBySessionIdOrderByPlayerNumberAsc(session.getId());
 
-        player.setCurrentBalanceRappen(player.getCurrentBalanceRappen() - amountRappen);
-        if (!isAutoBet) {
-            player.setLastSeenAt(Instant.now());
-        }
-        playerRepository.save(player);
-
-        session.setTotalPotRappen(session.getTotalPotRappen() + amountRappen);
-        sessionRepository.save(session);
-    }
-
-    private void advanceRoundOrFinish(GameSession session) {
-        int totalRounds = appProperties.getGame().getTotalRounds();
         if (session.getCurrentRound() < totalRounds) {
-            Instant now = Instant.now();
-            session.setCurrentRound(session.getCurrentRound() + 1);
-            session.setRoundPhase(RoundPhase.REGULAR);
-            session.setRoundStartTime(now);
-            session.setRoundDeadline(now.plusSeconds(appProperties.getGame().getRegularPhaseSeconds()));
+            int nextRound = session.getCurrentRound() + 1;
+            session.setCurrentRound(nextRound);
+            session.setRoundStartTime(Instant.now());
+            session.setRoundPhase(RoundPhase.INVESTMENT);
             sessionRepository.save(session);
         } else {
-            List<Player> allPlayers = playerRepository.findBySessionIdOrderByPlayerNumberAsc(session.getId());
+            // Nach Runde 10 -> Endabrechnung berechnen & Status FINISHED setzen.
+            // Spieler sehen zuerst den Fragebogen und sofort nach dem Absenden automatisch ihr Resultat!
             List<RoundInvestment> allInvestments = investmentRepository.findBySessionIdOrderByRoundNumberAscPlayerNumberAsc(session.getId());
             payoutService.resolveEndgame(session, allPlayers, allInvestments);
             playerRepository.saveAll(allPlayers);
@@ -293,16 +489,63 @@ public class GameEngineService {
         }
     }
 
-    public int calculateRemainingSeconds(GameSession session) {
-        if (session.getStatus() == SessionStatus.PAUSED) {
-            long ms = session.getPauseRemainingMs() != null ? session.getPauseRemainingMs() : 0L;
-            return (int) Math.max(0L, (ms + 999L) / 1000L);
-        }
-        if (session.getStatus() == SessionStatus.RUNNING && session.getRoundDeadline() != null) {
-            long ms = Duration.between(Instant.now(), session.getRoundDeadline()).toMillis();
-            return (int) Math.max(0L, (ms + 999L) / 1000L);
+    public int getFivePercentRappen(int initialBalanceRappen) {
+        return (int) Math.round(initialBalanceRappen * 0.05);
+    }
+
+    private int getMinimumRequiredInvestmentRappen(GameSession session, Player player) {
+        if (session.getGameMode() == GameMode.WITH_CONTRACTS && session.isContractActive() && player.isInContract()) {
+            int fivePercent = getFivePercentRappen(player.getInitialBalanceRappen());
+            if (player.getCurrentBalanceRappen() >= fivePercent) {
+                return fivePercent;
+            }
         }
         return 0;
+    }
+
+    private String formatRankingList(List<String> items) {
+        if (items == null || items.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < items.size(); i++) {
+            if (i > 0) {
+                sb.append(" | ");
+            }
+            sb.append(i + 1).append(". ").append(items.get(i).trim());
+        }
+        return sb.toString();
+    }
+
+    private String cleanNullable(String val) {
+        if (val == null || val.isBlank()) {
+            return null;
+        }
+        return val.trim();
+    }
+
+    private void recordInvestmentInternal(
+            GameSession session,
+            Player player,
+            int roundNumber,
+            int amountRappen
+    ) {
+        RoundInvestment investment = new RoundInvestment();
+        investment.setSession(session);
+        investment.setPlayer(player);
+        investment.setRoundNumber(roundNumber);
+        investment.setPlayerNumber(player.getPlayerNumber());
+        investment.setAmountRappen(amountRappen);
+        investment.setAutoBet(false);
+        investment.setCurrentlyInContract(player.isInContract());
+        investmentRepository.save(investment);
+
+        player.setCurrentBalanceRappen(player.getCurrentBalanceRappen() - amountRappen);
+        player.setLastSeenAt(Instant.now());
+        playerRepository.save(player);
+
+        session.setTotalPotRappen(session.getTotalPotRappen() + amountRappen);
+        sessionRepository.save(session);
     }
 
     public List<RoundHistoryDto> buildCompletedRoundHistory(
@@ -310,35 +553,50 @@ public class GameEngineService {
             List<RoundInvestment> allInvestments,
             int groupSize
     ) {
-        int maxCompletedRound = session.getStatus() == SessionStatus.FINISHED
-                ? appProperties.getGame().getTotalRounds()
-                : Math.max(0, session.getCurrentRound() - 1);
+        if (session.getStatus() != SessionStatus.RUNNING || session.getCurrentRound() <= 1) {
+            return List.of();
+        }
 
-        Map<Integer, Map<Integer, RoundInvestment>> byRoundAndPlayer = allInvestments.stream()
-                .filter(inv -> inv.getRoundNumber() <= maxCompletedRound)
-                .collect(Collectors.groupingBy(
-                        RoundInvestment::getRoundNumber,
-                        Collectors.toMap(
-                                RoundInvestment::getPlayerNumber,
-                                inv -> inv,
-                                (a, b) -> a
-                        )
+        int lastCompletedRound = session.getCurrentRound() - 1;
+        return List.of(buildSingleRoundHistoryDto(lastCompletedRound, allInvestments, groupSize));
+    }
+
+    public List<RoundHistoryDto> buildFullRoundHistory(
+            List<RoundInvestment> allInvestments,
+            int groupSize,
+            int maxRounds
+    ) {
+        List<RoundHistoryDto> fullHistory = new ArrayList<>();
+        for (int round = 1; round <= maxRounds; round++) {
+            fullHistory.add(buildSingleRoundHistoryDto(round, allInvestments, groupSize));
+        }
+        return fullHistory;
+    }
+
+    private RoundHistoryDto buildSingleRoundHistoryDto(
+            int roundNumber,
+            List<RoundInvestment> allInvestments,
+            int groupSize
+    ) {
+        Map<Integer, RoundInvestment> roundMap = allInvestments.stream()
+                .filter(inv -> inv.getRoundNumber() == roundNumber)
+                .collect(Collectors.toMap(
+                        RoundInvestment::getPlayerNumber,
+                        inv -> inv,
+                        (a, b) -> a
                 ));
 
-        List<RoundHistoryDto> history = new ArrayList<>();
-        for (int r = 1; r <= maxCompletedRound; r++) {
-            Map<Integer, RoundInvestment> roundMap = byRoundAndPlayer.getOrDefault(r, Map.of());
-            List<RoundHistoryDto.PlayerInvestmentDto> row = new ArrayList<>();
-            // Statische Reihenfolge Spieler 1 bis 6 (Spec 1.4)
-            for (int pNum = 1; pNum <= groupSize; pNum++) {
-                RoundInvestment inv = roundMap.get(pNum);
-                int amount = inv != null ? inv.getAmountRappen() : 0;
-                boolean autoBet = inv != null && inv.isAutoBet();
-                row.add(new RoundHistoryDto.PlayerInvestmentDto(pNum, amount, autoBet));
-            }
-            history.add(new RoundHistoryDto(r, row));
+        List<RoundHistoryDto.PlayerInvestmentDto> row = new ArrayList<>();
+        int roundTotalRappen = 0;
+        for (int pNum = 1; pNum <= groupSize; pNum++) {
+            RoundInvestment inv = roundMap.get(pNum);
+            int amount = inv != null ? inv.getAmountRappen() : 0;
+            boolean autoBet = inv != null && inv.isAutoBet();
+            roundTotalRappen += amount;
+            row.add(new RoundHistoryDto.PlayerInvestmentDto(pNum, amount, autoBet));
         }
-        return history;
+
+        return new RoundHistoryDto(roundNumber, roundTotalRappen, row);
     }
 
     private GameStateResponse buildGameStateResponse(
@@ -347,9 +605,8 @@ public class GameEngineService {
             List<Player> allPlayers,
             List<RoundInvestment> allInvestments
     ) {
-        int groupSize = appProperties.getGame().getGroupSize();
-        int totalRounds = appProperties.getGame().getTotalRounds();
         int currentRound = session.getCurrentRound();
+        RoundPhase roundPhase = session.getRoundPhase() != null ? session.getRoundPhase() : RoundPhase.INVESTMENT;
 
         Map<Integer, Player> playerByNumber = allPlayers.stream()
                 .collect(Collectors.toMap(Player::getPlayerNumber, p -> p));
@@ -358,57 +615,112 @@ public class GameEngineService {
                 .filter(inv -> inv.getRoundNumber() == currentRound)
                 .collect(Collectors.toMap(RoundInvestment::getPlayerNumber, inv -> inv, (a, b) -> a));
 
+        Set<Integer> surveyedPlayerNumbers = surveyRepository.findBySessionIdOrderByPlayerNumberAsc(session.getId())
+                .stream()
+                .map(PlayerSurvey::getPlayerNumber)
+                .collect(Collectors.toSet());
+
         RoundInvestment myCurrentRoundInvestment = currentRoundInvestments.get(player.getPlayerNumber());
-        boolean hasSubmitted = myCurrentRoundInvestment != null;
+        boolean hasSubmittedRound = myCurrentRoundInvestment != null;
+        boolean hasSubmittedSurvey = surveyedPlayerNumbers.contains(player.getPlayerNumber());
         Integer myCurrentAmount = myCurrentRoundInvestment != null ? myCurrentRoundInvestment.getAmountRappen() : null;
 
-        List<Integer> allowedOptions = appProperties.getGame().getAllowedInvestmentOptions().stream()
-                .filter(opt -> opt <= player.getCurrentBalanceRappen())
+        int minRequiredRappen = getMinimumRequiredInvestmentRappen(session, player);
+        List<Integer> allowedOptions = getAllowedInvestmentOptions().stream()
+                .filter(opt -> opt >= minRequiredRappen && opt <= player.getCurrentBalanceRappen())
                 .toList();
 
-        int ownTotalInvested = player.getInitialBalanceRappen() - player.getCurrentBalanceRappen();
+        int ownTotalInvested = allInvestments.stream()
+                .filter(inv -> inv.getPlayerNumber() == player.getPlayerNumber())
+                .mapToInt(RoundInvestment::getAmountRappen)
+                .sum();
 
         PlayerStateDto playerDto = new PlayerStateDto(
                 player.getPlayerNumber(),
                 player.getInitialBalanceRappen(),
                 player.getCurrentBalanceRappen(),
                 ownTotalInvested,
-                hasSubmitted,
+                hasSubmittedRound,
+                hasSubmittedSurvey,
+                player.isInContract(),
+                player.isEverJoinedContract(),
+                player.isLeftContract(),
+                player.getContractJoinChoice(),
                 myCurrentAmount,
                 allowedOptions,
-                player.getFinalPayoutRappen()
+                hasSubmittedSurvey ? player.getFinalPayoutRappen() : null
         );
 
         List<PlayerSlotStatusDto> slots = new ArrayList<>();
         for (int pNum = 1; pNum <= groupSize; pNum++) {
-            boolean isConnected = playerByNumber.containsKey(pNum);
+            Player slotPlayer = playerByNumber.get(pNum);
+            boolean isConnected = slotPlayer != null;
+            boolean inContract = slotPlayer != null && slotPlayer.isInContract();
+            boolean leftContract = slotPlayer != null && slotPlayer.isLeftContract();
             boolean isReady;
             if (session.getStatus() == SessionStatus.LOBBY) {
                 isReady = isConnected;
             } else if (session.getStatus() == SessionStatus.FINISHED) {
-                isReady = true;
+                isReady = surveyedPlayerNumbers.contains(pNum);
+            } else if (roundPhase == RoundPhase.CONTRACT_JOIN) {
+                isReady = slotPlayer != null && slotPlayer.isContractJoinDecided();
             } else {
                 isReady = currentRoundInvestments.containsKey(pNum);
             }
-            slots.add(new PlayerSlotStatusDto(pNum, isConnected, isReady));
+            slots.add(new PlayerSlotStatusDto(pNum, isConnected, isReady, inContract, leftContract));
         }
 
-        List<RoundHistoryDto> history = buildCompletedRoundHistory(session, allInvestments, groupSize);
-        EndgameResultDto endgameDto = payoutService.buildEndgameResultDto(session, player);
+        int memberCount = (int) allPlayers.stream().filter(Player::isInContract).count();
+        int fivePercentRappen = getFivePercentRappen(player.getInitialBalanceRappen());
+        boolean canLeaveContractNow = session.getStatus() == SessionStatus.RUNNING
+                && roundPhase == RoundPhase.INVESTMENT
+                && player.isInContract()
+                && currentRound >= 2;
+
+        boolean hasDecidedCurrentContractPhase = switch (roundPhase) {
+            case CONTRACT_JOIN -> player.isContractJoinDecided();
+            case CONTRACT_REVIEW -> !player.isInContract() || Integer.valueOf(currentRound).equals(player.getContractReviewDecidedRound());
+            case CONTRACT_VOTE -> !player.isInContract() || Integer.valueOf(currentRound).equals(player.getContractVoteRound());
+            case INVESTMENT -> hasSubmittedRound;
+        };
+
+        ContractStateDto contractStateDto = new ContractStateDto(
+                roundPhase,
+                session.isContractActive(),
+                session.isContractAbolished(),
+                memberCount,
+                fivePercentRappen,
+                canLeaveContractNow,
+                hasDecidedCurrentContractPhase,
+                session.getLastContractEvent()
+        );
+
+        List<RoundHistoryDto> history = (session.getStatus() == SessionStatus.FINISHED && hasSubmittedSurvey)
+                ? buildFullRoundHistory(allInvestments, groupSize, totalRounds)
+                : buildCompletedRoundHistory(session, allInvestments, groupSize);
+        // Resultat erst mitliefern, sobald der Spieler seinen Fragebogen abgeschickt hat!
+        EndgameResultDto endgameDto = (session.getStatus() == SessionStatus.FINISHED && hasSubmittedSurvey)
+                ? payoutService.buildEndgameResultDto(session, player)
+                : null;
         int riskPercent = (int) Math.round(session.getRiskLevel().doubleValue() * 100.0);
+
+        int visibleTotalPotRappen = (session.getStatus() == SessionStatus.FINISHED && hasSubmittedSurvey)
+                ? session.getTotalPotRappen()
+                : 0;
 
         return new GameStateResponse(
                 session.getId(),
                 session.getCode(),
                 session.getStatus(),
+                session.getGameMode(),
+                roundPhase,
+                contractStateDto,
                 session.getRiskLevel(),
                 riskPercent,
                 session.getTargetSumRappen(),
+                visibleTotalPotRappen,
                 session.getCurrentRound(),
                 totalRounds,
-                session.getRoundPhase(),
-                calculateRemainingSeconds(session),
-                session.getStatus() == SessionStatus.PAUSED,
                 allPlayers.size(),
                 groupSize,
                 playerDto,

@@ -35,27 +35,40 @@ public class GameSession {
     @Column(name = "status", length = 20, nullable = false)
     private SessionStatus status = SessionStatus.LOBBY;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "game_mode", length = 30, nullable = false)
+    private GameMode gameMode = GameMode.NORMAL;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "round_phase", length = 30, nullable = false)
+    private RoundPhase roundPhase = RoundPhase.INVESTMENT;
+
+    @Column(name = "contract_active", nullable = false)
+    private boolean contractActive = false;
+
+    @Column(name = "contract_abolished", nullable = false)
+    private boolean contractAbolished = false;
+
+    @Column(name = "contract_abolished_at_round")
+    private Integer contractAbolishedAtRound;
+
+    @Column(name = "vote_initiated_round")
+    private Integer voteInitiatedRound;
+
+    @Column(name = "vote_initiator_player_number")
+    private Integer voteInitiatorPlayerNumber;
+
+    @Column(name = "last_contract_event", length = 255)
+    private String lastContractEvent;
+
     @Column(name = "risk_level", precision = 4, scale = 2, nullable = false)
     private BigDecimal riskLevel;
 
     @Column(name = "current_round", nullable = false)
     private int currentRound = 0;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "round_phase", length = 20, nullable = false)
-    private RoundPhase roundPhase = RoundPhase.REGULAR;
-
     @Column(name = "round_start_time")
     private Instant roundStartTime;
-
-    @Column(name = "round_deadline")
-    private Instant roundDeadline;
-
-    @Column(name = "paused_at")
-    private Instant pausedAt;
-
-    @Column(name = "pause_remaining_ms")
-    private Long pauseRemainingMs;
 
     @Column(name = "target_sum_rappen", nullable = false)
     private int targetSumRappen;
@@ -119,6 +132,70 @@ public class GameSession {
         this.status = status;
     }
 
+    public GameMode getGameMode() {
+        return gameMode;
+    }
+
+    public void setGameMode(GameMode gameMode) {
+        this.gameMode = gameMode;
+    }
+
+    public RoundPhase getRoundPhase() {
+        return roundPhase;
+    }
+
+    public void setRoundPhase(RoundPhase roundPhase) {
+        this.roundPhase = roundPhase;
+    }
+
+    public boolean isContractActive() {
+        return contractActive;
+    }
+
+    public void setContractActive(boolean contractActive) {
+        this.contractActive = contractActive;
+    }
+
+    public boolean isContractAbolished() {
+        return contractAbolished;
+    }
+
+    public void setContractAbolished(boolean contractAbolished) {
+        this.contractAbolished = contractAbolished;
+    }
+
+    public Integer getContractAbolishedAtRound() {
+        return contractAbolishedAtRound;
+    }
+
+    public void setContractAbolishedAtRound(Integer contractAbolishedAtRound) {
+        this.contractAbolishedAtRound = contractAbolishedAtRound;
+    }
+
+    public Integer getVoteInitiatedRound() {
+        return voteInitiatedRound;
+    }
+
+    public void setVoteInitiatedRound(Integer voteInitiatedRound) {
+        this.voteInitiatedRound = voteInitiatedRound;
+    }
+
+    public Integer getVoteInitiatorPlayerNumber() {
+        return voteInitiatorPlayerNumber;
+    }
+
+    public void setVoteInitiatorPlayerNumber(Integer voteInitiatorPlayerNumber) {
+        this.voteInitiatorPlayerNumber = voteInitiatorPlayerNumber;
+    }
+
+    public String getLastContractEvent() {
+        return lastContractEvent;
+    }
+
+    public void setLastContractEvent(String lastContractEvent) {
+        this.lastContractEvent = lastContractEvent;
+    }
+
     public BigDecimal getRiskLevel() {
         return riskLevel;
     }
@@ -135,44 +212,12 @@ public class GameSession {
         this.currentRound = currentRound;
     }
 
-    public RoundPhase getRoundPhase() {
-        return roundPhase;
-    }
-
-    public void setRoundPhase(RoundPhase roundPhase) {
-        this.roundPhase = roundPhase;
-    }
-
     public Instant getRoundStartTime() {
         return roundStartTime;
     }
 
     public void setRoundStartTime(Instant roundStartTime) {
         this.roundStartTime = roundStartTime;
-    }
-
-    public Instant getRoundDeadline() {
-        return roundDeadline;
-    }
-
-    public void setRoundDeadline(Instant roundDeadline) {
-        this.roundDeadline = roundDeadline;
-    }
-
-    public Instant getPausedAt() {
-        return pausedAt;
-    }
-
-    public void setPausedAt(Instant pausedAt) {
-        this.pausedAt = pausedAt;
-    }
-
-    public Long getPauseRemainingMs() {
-        return pauseRemainingMs;
-    }
-
-    public void setPauseRemainingMs(Long pauseRemainingMs) {
-        this.pauseRemainingMs = pauseRemainingMs;
     }
 
     public int getTargetSumRappen() {

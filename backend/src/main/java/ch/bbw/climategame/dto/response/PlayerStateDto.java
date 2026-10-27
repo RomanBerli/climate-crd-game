@@ -8,6 +8,11 @@ public record PlayerStateDto(
         int currentBalanceRappen,
         int ownTotalInvestedRappen,
         boolean hasSubmittedCurrentRound,
+        boolean hasSubmittedSurvey,
+        boolean inContract,
+        boolean everJoinedContract,
+        boolean leftContract,
+        String contractJoinChoice,
         Integer currentRoundInvestmentRappen,
         List<Integer> allowedInvestmentOptions,
         Integer finalPayoutRappen

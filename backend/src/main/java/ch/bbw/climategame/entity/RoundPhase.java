@@ -1,6 +1,8 @@
 package ch.bbw.climategame.entity;
 
 public enum RoundPhase {
-    REGULAR,
-    OVERTIME
+    CONTRACT_JOIN,
+    CONTRACT_REVIEW,
+    CONTRACT_VOTE,
+    INVESTMENT
 }

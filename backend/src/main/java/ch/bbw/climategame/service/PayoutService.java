@@ -36,11 +36,7 @@ public class PayoutService {
         session.setRiskOccurred(riskOccurred);
 
         for (Player player : players) {
-            int ownInvestments = allInvestments.stream()
-                    .filter(inv -> inv.getPlayerNumber() == player.getPlayerNumber())
-                    .mapToInt(RoundInvestment::getAmountRappen)
-                    .sum();
-            int remainingBalance = Math.max(0, player.getInitialBalanceRappen() - ownInvestments);
+            int remainingBalance = Math.max(0, player.getCurrentBalanceRappen());
             player.setCurrentBalanceRappen(remainingBalance);
 
             if (goalReached || !riskOccurred) {
@@ -51,9 +47,6 @@ public class PayoutService {
         }
 
         session.setStatus(SessionStatus.FINISHED);
-        session.setRoundDeadline(null);
-        session.setPausedAt(null);
-        session.setPauseRemainingMs(null);
     }
 
     public EndgameResultDto buildEndgameResultDto(GameSession session, Player player) {
@@ -77,7 +70,7 @@ public class PayoutService {
             message = "Ziel verfehlt. Sie hatten Glück: Ihr Restguthaben bleibt erhalten.";
         } else {
             scenarioCode = "SCENARIO_C_GOAL_MISSED_LOSS";
-            message = "Ziel verfehlt. Ihr Geld ging durch das " + riskPercent + "% Risiko verloren. Auszahlung: 0 Rappen.";
+            message = "Ziel verfehlt. Ihr Geld ging durch das " + riskPercent + "% Risiko verloren. Auszahlung: 0 Fr.";
         }
 
         return new EndgameResultDto(

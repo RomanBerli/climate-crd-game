@@ -1,29 +1,35 @@
 import React, { useState } from 'react';
+import { GameMode } from '../../types/game';
 
 interface CreateSessionModalProps {
-  onCreateSession: (riskLevel: number) => Promise<void>;
+  onCreateSession: (gameMode: GameMode) => Promise<void>;
 }
 
-const TREATMENTS = [
+const GAME_MODES: Array<{
+  value: GameMode;
+  label: string;
+  description: string;
+  disabled: boolean;
+  badge?: string;
+}> = [
   {
-    value: 0.9,
-    label: '90% Risiko-Treatment (High Risk)',
-    description: '90% Verlustwahrscheinlichkeit bei Verfehlen des 1200-Rappen-Ziels (Milinski et al.)',
+    value: 'NORMAL',
+    label: 'Variante 1: Normal',
+    description:
+      'Klassisches Milinski Collective-Risk Experiment (ohne Verträge).',
+    disabled: false,
   },
   {
-    value: 0.5,
-    label: '50% Risiko-Treatment (Medium Risk)',
-    description: '50% Verlustwahrscheinlichkeit bei Verfehlen des 1200-Rappen-Ziels',
-  },
-  {
-    value: 0.1,
-    label: '10% Risiko-Treatment (Low Risk)',
-    description: '10% Verlustwahrscheinlichkeit bei Verfehlen des 1200-Rappen-Ziels',
+    value: 'WITH_CONTRACTS',
+    label: 'Variante 2: Mit Verträgen (Klimaabkommen)',
+    description:
+      'Freiwilliger Beitritt zum Klimaabkommen vor Runde 1 («Ja», «Nur wenn min. die Hälfte dabei» oder «Nein»), verbindlicher Mindestbeitrag pro Runde und optionaler Austritt ab Runde 2.',
+    disabled: false,
   },
 ];
 
 export const CreateSessionModal: React.FC<CreateSessionModalProps> = ({ onCreateSession }) => {
-  const [selectedRisk, setSelectedRisk] = useState<number>(0.9);
+  const [selectedMode, setSelectedMode] = useState<GameMode>('NORMAL');
   const [creating, setCreating] = useState<boolean>(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -31,7 +37,7 @@ export const CreateSessionModal: React.FC<CreateSessionModalProps> = ({ onCreate
     if (creating) return;
     setCreating(true);
     try {
-      await onCreateSession(selectedRisk);
+      await onCreateSession(selectedMode);
     } finally {
       setCreating(false);
     }
@@ -41,27 +47,34 @@ export const CreateSessionModal: React.FC<CreateSessionModalProps> = ({ onCreate
     <form className="admin-create-card" onSubmit={handleSubmit}>
       <div className="admin-create-card__header">
         <h2>Neue Experiment-Session anlegen</h2>
-        <p>Wählen Sie das gewünschte Risiko-Treatment für die 6er-Gruppe (Startkapital: 400 Rappen, Ziel: 1200 Rappen).</p>
+        <p>
+          Wählen Sie den Spielmodus für die Gruppe (Risiko-Prozentsatz wird zentral über{' '}
+          <code>ENV_RISK_LEVEL</code>, Default 90%, gesteuert).
+        </p>
       </div>
 
-      <div className="treatment-options">
-        {TREATMENTS.map((t) => (
+      <div className="treatment-options treatment-options--two-cols">
+        {GAME_MODES.map((m) => (
           <label
-            key={t.value}
+            key={m.value}
             className={`treatment-option ${
-              selectedRisk === t.value ? 'treatment-option--selected' : ''
-            }`}
+              selectedMode === m.value ? 'treatment-option--selected' : ''
+            } ${m.disabled ? 'treatment-option--disabled' : ''}`}
           >
             <input
               type="radio"
-              name="riskLevel"
-              value={t.value}
-              checked={selectedRisk === t.value}
-              onChange={() => setSelectedRisk(t.value)}
+              name="gameMode"
+              value={m.value}
+              disabled={m.disabled}
+              checked={selectedMode === m.value}
+              onChange={() => !m.disabled && setSelectedMode(m.value)}
             />
             <div>
-              <strong>{t.label}</strong>
-              <span>{t.description}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <strong>{m.label}</strong>
+                {m.badge && <span className="badge badge--neutral">{m.badge}</span>}
+              </div>
+              <span>{m.description}</span>
             </div>
           </label>
         ))}

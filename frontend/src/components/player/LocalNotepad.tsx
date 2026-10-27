@@ -12,19 +12,14 @@ interface LocalNotepadProps {
 export const LocalNotepad: React.FC<LocalNotepadProps> = ({ notes, onChange }) => {
   return (
     <aside className="notepad-card">
-      <div className="notepad-card__header">
+      <div className="notepad-card__header" style={{ marginBottom: '0.75rem' }}>
         <h3 className="section-title">Persönlicher Notizblock</h3>
-        <span className="badge badge--private">100% Lokal & Privat</span>
       </div>
-      <p className="notepad-card__description">
-        Hier können Sie über alle 10 Runden hinweg eigene Berechnungen und Notizen festhalten.
-        Ihre Eingaben verbleiben ausschliesslich in Ihrem Browser.
-      </p>
       <textarea
         className="notepad-card__textarea"
         value={notes}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="Eigene Notizen & Rechnungen (z. B. bisherige Rundenbeiträge, Ziel 1200 Rappen)..."
+        placeholder="Eigene Notizen & Rechnungen (z. B. bisherige Rundenbeiträge, Ziel 12 Fr.)..."
         rows={12}
       />
     </aside>

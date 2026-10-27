@@ -1,24 +1,21 @@
 import React, { useState } from 'react';
 import { GameStateResponse } from '../types/game';
-import { submitInvestment } from '../api/gameApi';
+import { submitContractLeave, submitInvestment } from '../api/gameApi';
 import { useLocalNotepad } from '../hooks/useLocalNotepad';
 import { RoundHeader } from '../components/player/RoundHeader';
-import { StageTimer } from '../components/player/StageTimer';
+import { ContractPhaseCard } from '../components/player/ContractPhaseCard';
 import { InvestmentButtons } from '../components/player/InvestmentButtons';
 import { PlayerStatusList } from '../components/player/PlayerStatusList';
 import { HistoryTable } from '../components/player/HistoryTable';
 import { LocalNotepad } from '../components/player/LocalNotepad';
-import { PauseOverlay } from '../components/player/PauseOverlay';
 
 interface GamePageProps {
   gameState: GameStateResponse;
-  displaySeconds: number;
   onStateUpdated: (newState: GameStateResponse) => void;
 }
 
 export const GamePage: React.FC<GamePageProps> = ({
   gameState,
-  displaySeconds,
   onStateUpdated,
 }) => {
   const [investError, setInvestError] = useState<string | null>(null);
@@ -37,40 +34,59 @@ export const GamePage: React.FC<GamePageProps> = ({
     }
   };
 
+  const handleLeaveContract = async () => {
+    setInvestError(null);
+    try {
+      const updated = await submitContractLeave();
+      onStateUpdated(updated);
+    } catch (err) {
+      setInvestError(err instanceof Error ? err.message : 'Fehler beim Verlassen des Abkommens.');
+    }
+  };
+
+  const allPlayersReady = gameState.playersStatus.every((slot) => slot.isReady);
+
   return (
     <div className="game-layout">
-      <PauseOverlay visible={gameState.isPaused} />
-
       <RoundHeader gameState={gameState} />
 
       <div className="game-main-grid">
         <div className="game-main-grid__left">
-          <StageTimer
-            roundPhase={gameState.roundPhase}
-            remainingSeconds={displaySeconds}
-            hasSubmitted={gameState.player.hasSubmittedCurrentRound}
-          />
-
           {investError && <div className="alert alert--error">{investError}</div>}
 
-          <InvestmentButtons
-            currentBalanceRappen={gameState.player.currentBalanceRappen}
-            allowedOptions={gameState.player.allowedInvestmentOptions}
-            hasSubmitted={gameState.player.hasSubmittedCurrentRound}
-            submittedAmount={gameState.player.currentRoundInvestmentRappen}
-            isPaused={gameState.isPaused}
-            onInvest={handleInvest}
-          />
-
-          <PlayerStatusList
-            playersStatus={gameState.playersStatus}
-            myPlayerNumber={gameState.player.playerNumber}
-          />
+          {gameState.roundPhase !== 'INVESTMENT' ? (
+            <ContractPhaseCard
+              gameState={gameState}
+              onStateUpdated={onStateUpdated}
+            />
+          ) : (
+            <InvestmentButtons
+              initialBalanceRappen={gameState.player.initialBalanceRappen}
+              currentBalanceRappen={gameState.player.currentBalanceRappen}
+              allowedOptions={gameState.player.allowedInvestmentOptions}
+              hasSubmitted={gameState.player.hasSubmittedCurrentRound}
+              submittedAmount={gameState.player.currentRoundInvestmentRappen}
+              allPlayersReady={allPlayersReady}
+              inContract={gameState.player.inContract}
+              canLeaveContract={gameState.contractState?.canLeaveContractNow ?? false}
+              minInvestmentRappen={gameState.contractState?.minInvestmentRappen ?? 0}
+              lastContractEvent={gameState.contractState?.lastContractEvent ?? null}
+              onInvest={handleInvest}
+              onLeaveContract={handleLeaveContract}
+            />
+          )}
 
           <HistoryTable
             history={gameState.history}
             myPlayerNumber={gameState.player.playerNumber}
             groupSize={gameState.groupSize}
+            initialBalanceRappen={gameState.player.initialBalanceRappen}
+          />
+
+          <PlayerStatusList
+            playersStatus={gameState.playersStatus}
+            myPlayerNumber={gameState.player.playerNumber}
+            gameMode={gameState.gameMode}
           />
         </div>
 

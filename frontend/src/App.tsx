@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useGamePolling } from './hooks/useGamePolling';
 import { LobbyPage } from './pages/LobbyPage';
 import { GamePage } from './pages/GamePage';
+import { SurveyPage } from './pages/SurveyPage';
 import { EndgamePage } from './pages/EndgamePage';
 import { AdminPage } from './pages/AdminPage';
 
@@ -32,7 +33,6 @@ export const App: React.FC = () => {
 
   const {
     gameState,
-    displaySeconds,
     loading,
     refreshNow,
     setGameStateDirectly,
@@ -52,25 +52,39 @@ export const App: React.FC = () => {
     );
   }
 
-  // Reconnect & State Routing (Spec 4.2 & Plan 3.5)
-  if (gameState && (gameState.status === 'RUNNING' || gameState.status === 'PAUSED')) {
+  if (gameState && gameState.status === 'RUNNING') {
     return (
       <GamePage
         gameState={gameState}
-        displaySeconds={displaySeconds}
         onStateUpdated={setGameStateDirectly}
       />
     );
   }
 
   if (gameState && gameState.status === 'FINISHED') {
-    return <EndgamePage gameState={gameState} onResetSession={refreshNow} />;
+    if (!gameState.player.hasSubmittedSurvey) {
+      return (
+        <SurveyPage
+          gameState={gameState}
+          onStateUpdated={setGameStateDirectly}
+        />
+      );
+    }
+    return (
+      <EndgamePage
+        gameState={gameState}
+        onResetSession={async () => {
+          setGameStateDirectly(null);
+        }}
+      />
+    );
   }
 
   return (
     <LobbyPage
       gameState={gameState}
       onJoined={refreshNow}
+      onLeft={() => setGameStateDirectly(null)}
       onNavigateAdmin={navigateToAdmin}
     />
   );
