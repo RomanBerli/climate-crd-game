@@ -61,6 +61,9 @@ public class PlayerSurvey {
     @Column(name = "contract_stayed_reason", length = 500)
     private String contractStayedReason;
 
+    @Column(name = "low_risk_invest_rappen")
+    private Integer lowRiskInvestRappen;
+
     @Column(name = "age", nullable = false)
     private int age;
 
@@ -166,6 +169,14 @@ public class PlayerSurvey {
 
     public void setContractStayedReason(String contractStayedReason) {
         this.contractStayedReason = contractStayedReason;
+    }
+
+    public Integer getLowRiskInvestRappen() {
+        return lowRiskInvestRappen;
+    }
+
+    public void setLowRiskInvestRappen(Integer lowRiskInvestRappen) {
+        this.lowRiskInvestRappen = lowRiskInvestRappen;
     }
 
     public int getAge() {

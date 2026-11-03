@@ -334,27 +334,26 @@ public class GameEngineService {
         }
 
         int currentRound = session.getCurrentRound();
-        if (currentRound < 2) {
+        if (currentRound >= totalRounds) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Mitglieder dürfen das Abkommen erst nach der ersten Runde (ab Runde 2) verlassen."
+                    "In der letzten Runde kann das Abkommen nicht mehr für die nächste Runde verlassen werden."
             );
         }
 
-        tokenPlayer.setInContract(false);
-        tokenPlayer.setLeftContract(true);
-        tokenPlayer.setLeftContractAtRound(currentRound);
+        if (tokenPlayer.getLeftContractAtRound() != null) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Sie haben den Austritt für die nächste Runde bereits vorgemerkt."
+            );
+        }
+
+        // Austritt wird für die nächste Runde vorgemerkt; in der aktuellen Runde bleibt der Spieler Mitglied
+        tokenPlayer.setLeftContractAtRound(currentRound + 1);
         tokenPlayer.setLastSeenAt(Instant.now());
         playerRepository.save(tokenPlayer);
 
         List<Player> allPlayers = playerRepository.findBySessionIdOrderByPlayerNumberAsc(session.getId());
-        long remainingMembers = allPlayers.stream().filter(Player::isInContract).count();
-        if (remainingMembers == 0) {
-            session.setContractActive(false);
-        }
-        session.setLastContractEvent("Spieler " + tokenPlayer.getPlayerNumber() + " hat das Abkommen verlassen.");
-        sessionRepository.save(session);
-
         List<RoundInvestment> allInvestments = investmentRepository.findBySessionIdOrderByRoundNumberAscPlayerNumberAsc(session.getId());
         Player updatedPlayer = allPlayers.stream()
                 .filter(p -> p.getPlayerNumber() == tokenPlayer.getPlayerNumber())
@@ -454,6 +453,7 @@ public class GameEngineService {
         survey.setContractNotJoinedReason(cleanNullable(request.contractNotJoinedReason()));
         survey.setContractLeftReason(cleanNullable(request.contractLeftReason()));
         survey.setContractStayedReason(cleanNullable(request.contractStayedReason()));
+        survey.setLowRiskInvestRappen(request.lowRiskInvestRappen());
         survey.setAge(request.age());
         survey.setGender(request.gender().trim());
         survey.setTwintPhone(request.twintPhone().trim());
@@ -475,6 +475,31 @@ public class GameEngineService {
 
         if (session.getCurrentRound() < totalRounds) {
             int nextRound = session.getCurrentRound() + 1;
+
+            // Vorgemerkte Abkommens-Austritte zum Rundenwechsel wirksam machen
+            List<Integer> leavingPlayerNumbers = new ArrayList<>();
+            for (Player p : allPlayers) {
+                if (p.isInContract() && p.getLeftContractAtRound() != null && p.getLeftContractAtRound() <= nextRound) {
+                    p.setInContract(false);
+                    p.setLeftContract(true);
+                    p.setLeftContractAtRound(nextRound);
+                    leavingPlayerNumbers.add(p.getPlayerNumber());
+                }
+            }
+            if (!leavingPlayerNumbers.isEmpty()) {
+                playerRepository.saveAll(allPlayers);
+                long remainingMembers = allPlayers.stream().filter(Player::isInContract).count();
+                if (remainingMembers == 0) {
+                    session.setContractActive(false);
+                }
+                if (leavingPlayerNumbers.size() == 1) {
+                    session.setLastContractEvent("Spieler " + leavingPlayerNumbers.get(0) + " hat das Abkommen verlassen.");
+                } else {
+                    String joinedNums = leavingPlayerNumbers.stream().map(String::valueOf).collect(Collectors.joining(", "));
+                    session.setLastContractEvent("Spieler " + joinedNums + " haben das Abkommen verlassen.");
+                }
+            }
+
             session.setCurrentRound(nextRound);
             session.setRoundStartTime(Instant.now());
             session.setRoundPhase(RoundPhase.INVESTMENT);
@@ -506,6 +531,9 @@ public class GameEngineService {
     private String formatRankingList(List<String> items) {
         if (items == null || items.isEmpty()) {
             return "";
+        }
+        if (items.size() == 1) {
+            return items.get(0).trim();
         }
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < items.size(); i++) {
@@ -675,7 +703,8 @@ public class GameEngineService {
         boolean canLeaveContractNow = session.getStatus() == SessionStatus.RUNNING
                 && roundPhase == RoundPhase.INVESTMENT
                 && player.isInContract()
-                && currentRound >= 2;
+                && player.getLeftContractAtRound() == null
+                && currentRound < totalRounds;
 
         boolean hasDecidedCurrentContractPhase = switch (roundPhase) {
             case CONTRACT_JOIN -> player.isContractJoinDecided();

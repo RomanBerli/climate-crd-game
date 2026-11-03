@@ -9,11 +9,6 @@ interface HistoryTableProps {
   initialBalanceRappen?: number;
 }
 
-/**
- * Statische Transparenz-Anzeige:
- * Zeigt ausschliesslich die Einzelbeiträge der unmittelbar letzten Runde (Spieler 1 bis Spieler 6)
- * sowie das Runden-Total in Franken (ohne kumuliertes Fonds-Total, damit die Spieler selbst Notizen machen).
- */
 export const HistoryTable: React.FC<HistoryTableProps> = ({
   history,
   myPlayerNumber,
@@ -25,14 +20,11 @@ export const HistoryTable: React.FC<HistoryTableProps> = ({
   return (
     <section className="history-card">
       <div className="history-card__header">
-        <h3 className="section-title">
+        <h3 className="section-title" style={{ marginBottom: 0 }}>
           {lastRoundEntry
             ? `Ergebnis der letzten Runde (Runde ${lastRoundEntry.round})`
             : 'Ergebnis der letzten Runde'}
         </h3>
-        <span className="history-card__hint">
-          Es wird nur die jeweils letzte Runde angezeigt – nutzen Sie das Notizfeld für eigene Berechnungen
-        </span>
       </div>
 
       {!lastRoundEntry ? (
@@ -44,7 +36,6 @@ export const HistoryTable: React.FC<HistoryTableProps> = ({
           <table className="history-table">
             <thead>
               <tr>
-                <th>Runde</th>
                 {playerColumns.map((pNum) => (
                   <th
                     key={pNum}
@@ -59,7 +50,6 @@ export const HistoryTable: React.FC<HistoryTableProps> = ({
             </thead>
             <tbody>
               <tr>
-                <td className="history-table__round">Runde {lastRoundEntry.round}</td>
                 {playerColumns.map((pNum) => {
                   const entry = lastRoundEntry.investments.find(
                     (inv) => inv.playerNumber === pNum

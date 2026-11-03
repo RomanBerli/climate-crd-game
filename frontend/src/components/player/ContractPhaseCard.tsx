@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { ContractJoinChoice, GameStateResponse } from '../../types/game';
 import { submitContractJoin } from '../../api/gameApi';
-import { formatFr } from '../../utils/currency';
 
 interface ContractPhaseCardProps {
   gameState: GameStateResponse;
@@ -33,37 +32,16 @@ export const ContractPhaseCard: React.FC<ContractPhaseCardProps> = ({
   };
 
   const getDecisionLabel = (choice: ContractJoinChoice | null): string => {
-    if (choice === 'YES') return 'Ja – Dem Abkommen beitreten';
-    if (choice === 'CONDITIONAL') {
-      return `Nur wenn min. die Hälfte (≥ ${minHalf} Spieler) dabei ist`;
-    }
-    if (choice === 'NO') return 'Nein – Nicht beitreten';
-    return player.inContract ? 'Dem Abkommen beitreten' : 'Nicht beigetreten';
+    if (choice === 'YES') return 'Ja';
+    if (choice === 'CONDITIONAL') return `Ab ${minHalf} Spielern`;
+    if (choice === 'NO') return 'Nein';
+    return player.inContract ? 'Ja' : 'Nein';
   };
 
   return (
     <section className="investment-card">
       <div className="investment-card__header">
-        <h2>Freiwilliges Klimaabkommen (vor Runde 1)</h2>
-        <span className="badge badge--accent">Vor Runde 1</span>
-      </div>
-
-      <div className="lobby-rules-summary" style={{ marginBottom: '1.25rem' }}>
-        <h3>Regeln des Klimaabkommens</h3>
-        <ul>
-          <li>
-            <strong>Mindestbeitrag für Mitglieder:</strong> Jedes Mitglied verpflichtet sich, pro Runde mindestens{' '}
-            <strong>{formatFr(contractState.minInvestmentRappen)}</strong> einzuzahlen (0 Fr. ist für Mitglieder gesperrt).
-          </li>
-          <li>
-            <strong>Bedingter Beitritt:</strong> Wählen Sie{' '}
-            <em>«Nur wenn min. die Hälfte dabei»</em>, werden Sie nur dann Mitglied, wenn insgesamt mindestens{' '}
-            <strong>{minHalf} von {groupSize} Spielern</strong> bereit sind beizutreten.
-          </li>
-          <li>
-            <strong>Austritt:</strong> Nach der ersten Runde (ab Runde 2) können Mitglieder das Abkommen optional wieder verlassen.
-          </li>
-        </ul>
+        <h2>Abkommen beitreten</h2>
       </div>
 
       {error && <div className="alert alert--error">{error}</div>}
@@ -87,10 +65,6 @@ export const ContractPhaseCard: React.FC<ContractPhaseCardProps> = ({
             onClick={() => handleJoinChoice('YES')}
           >
             <span className="invest-btn__amount">Ja</span>
-            <span className="invest-btn__desc">
-              Verbindlich beitreten (Mindestbeitrag {formatFr(contractState.minInvestmentRappen)} pro Runde)
-            </span>
-            <span className="invest-btn__action">Dem Abkommen beitreten →</span>
           </button>
 
           <button
@@ -100,10 +74,6 @@ export const ContractPhaseCard: React.FC<ContractPhaseCardProps> = ({
             onClick={() => handleJoinChoice('CONDITIONAL')}
           >
             <span className="invest-btn__amount">Ab {minHalf} Spielern</span>
-            <span className="invest-btn__desc">
-              Nur beitreten, wenn min. die Hälfte (≥ {minHalf} von {groupSize} Spielern) dabei ist
-            </span>
-            <span className="invest-btn__action">Bedingt beitreten →</span>
           </button>
 
           <button
@@ -113,10 +83,6 @@ export const ContractPhaseCard: React.FC<ContractPhaseCardProps> = ({
             onClick={() => handleJoinChoice('NO')}
           >
             <span className="invest-btn__amount">Nein</span>
-            <span className="invest-btn__desc">
-              Nicht beitreten (keine Bindung, auch 0 Fr. pro Runde wählbar)
-            </span>
-            <span className="invest-btn__action">Ohne Abkommen spielen →</span>
           </button>
         </div>
       )}

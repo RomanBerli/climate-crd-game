@@ -1,84 +1,85 @@
 import React, { useState } from 'react';
 import { GameStateResponse } from '../types/game';
 import { submitSurvey } from '../api/gameApi';
+import { formatFr } from '../utils/currency';
 
 interface SurveyPageProps {
   gameState: GameStateResponse;
   onStateUpdated: (newState: GameStateResponse) => void;
 }
 
-const UNFAIRNESS_OPTIONS = [
-  'Ich habe mehr eingezahlt, um es auszugleichen.',
-  'Ich habe gleich weitergemacht.',
-  'Ich habe weniger eingezahlt, weil ich das unfair fand.',
-  'Ich habe es nicht bemerkt oder es gab keine Beiträge unter dem fairen Beitrag.',
+const STRATEGY_OPTIONS = [
+  'Ich habe möglichst wenig eingezahlt, um viel Geld zu behalten, obwohl die Gruppe dadurch das Ziel verfehlen konnte.',
+  'Ich habe in jeder Runde ungefähr den fairen Beitrag von 30 Rappen eingezahlt.',
+  'Ich habe mehr als den fairen Beitrag eingezahlt, damit die Gruppe das Ziel sicher erreicht.',
+  'Ich habe mich nach den Beiträgen der anderen gerichtet.',
+  'Ich hatte keine feste Strategie.',
 ];
 
-const INITIAL_MOTIVATION_ITEMS = [
-  'möglichst viel eigenes Geld behalten',
-  'den Verlust des eigenen Geldes vermeiden',
-  'dass die Gruppe das Ziel erreicht',
-  'fair zu sein bzw. meinen Anteil zu leisten',
-  'den Preis zu gewinnen',
+const UNFAIRNESS_OPTIONS = [
+  'Ich habe mehr eingezahlt, um es auszugleichen.',
+  'Ich habe mich nicht beeinflussen lassen und gleich weitergemacht.',
+  'Ich habe weniger eingezahlt, weil ich das unfair fand.',
+  'Ich habe weniger eingezahlt, weil ich nicht mehr an das Ziel geglaubt habe.',
+  'Ich habe nicht auf die Beiträge der anderen geachtet.',
+  'Es gab keine Beiträge unter 30 Rappen.',
 ];
 
 const CONTRACT_JOINED_OPTIONS = [
-  'Ich wollte sicherstellen, dass die Gruppe das Ziel erreicht.',
-  'Ich habe erwartet, dass die anderen auch beitreten und ihren Teil leisten.',
-  'Der feste Mindestbeitrag gab mir Sicherheit und Planbarkeit.',
-  'Ich finde es fair, dass alle gleich viel beitragen.',
-  'Ich wollte den anderen zeigen, dass ich kooperiere.',
-  'Weil mindestens die Hälfte der Gruppe ebenfalls bereit war beizutreten.',
+  'Ich wollte die Chance erhöhen, dass die Gruppe das Ziel erreicht.',
+  'Ich wollte verhindern, dass ich mein eigenes Geld verliere.',
+  'Ich habe erwartet, dass die meisten anderen auch beitreten.',
+  'Ich wollte ein Vorbild sein, damit die anderen auch fair spielen.',
+  'Ich finde es fair, wenn alle gleich viel beitragen.',
+  'Ich wollte mich auf einen festen Beitrag festlegen, statt jede Runde neu zu entscheiden.',
   'OTHER',
 ];
 
 const CONTRACT_NOT_JOINED_OPTIONS = [
-  'Ich wollte flexibel bleiben und selbst entscheiden, wie viel ich einzahle.',
-  'Ich wollte weniger als den Mindestbeitrag einzahlen.',
-  'Ich habe nicht darauf vertraut, dass die anderen sich daran halten.',
-  'Ich dachte, die Gruppe erreicht das Ziel auch ohne mich bzw. ohne Abkommen.',
-  'Es wollten weniger als die Hälfte der Spieler beitreten (Bedingung nicht erfüllt).',
-  'Ich wollte auch ohne Abkommen meinen fairen Teil leisten.',
+  'Ich wollte möglichst wenig einzahlen, um viel Geld zu behalten.',
+  'Ich wollte meine Beiträge den Beiträgen der anderen anpassen können.',
+  'Ich habe nicht erwartet, dass genug andere beitreten.',
+  'Ich dachte, die Gruppe erreicht das Ziel auch ohne Abkommen.',
+  'Ich wollte meinen fairen Beitrag freiwillig leisten, ohne mich zu verpflichten.',
   'Ich habe das Abkommen nicht richtig verstanden.',
   'OTHER',
 ];
 
 const CONTRACT_LEFT_OPTIONS = [
-  'Andere haben weniger beigetragen als ich. Das fand ich unfair.',
-  'Ich dachte, das Ziel wird sowieso nicht mehr erreicht.',
-  'Ich dachte, das Ziel wird auch ohne meinen Beitrag erreicht.',
-  'Ich wollte mehr eigenes Geld behalten und wieder frei entscheiden können.',
-  'Andere sind ausgetreten, deshalb bin ich auch gegangen.',
+  'Ich fand es unfair, dass andere weniger als 30 Rappen eingezahlt haben.',
+  'Ich habe nicht mehr geglaubt, dass die Gruppe das Ziel erreicht.',
+  'Ich dachte, die Gruppe erreicht das Ziel auch ohne meinen Beitrag.',
+  'Ich wollte mehr eigenes Geld behalten.',
+  'Ich wollte meine Beiträge den Beiträgen der anderen anpassen können.',
+  'Ich bin ausgetreten, weil andere ausgetreten sind.',
   'OTHER',
 ];
 
-const CONTRACT_STAYED_OPTIONS = [
-  'Ich wollte das Ziel der Gruppe erreichen.',
-  'Ich hatte es zugesagt und wollte mich daran halten.',
-  'Die anderen haben sich auch daran gehalten.',
-  'Ich habe nicht über einen Austritt nachgedacht.',
-  'OTHER',
-];
+const GENDER_OPTIONS = ['männlich', 'weiblich', 'keine Angabe'];
 
 export const SurveyPage: React.FC<SurveyPageProps> = ({
   gameState,
   onStateUpdated,
 }) => {
-  const { player, sessionCode, gameMode } = gameState;
+  const { player, gameMode } = gameState;
   const isContractsMode = gameMode === 'WITH_CONTRACTS';
 
-  // Nur die Abkommen-Fragen einblenden, die auf das tatsächliche Verhalten des Spielers zutreffen
-  const showJoinedQuestion = isContractsMode && player.everJoinedContract;
-  const showNotJoinedQuestion = isContractsMode && !player.everJoinedContract;
-  const showLeftQuestion = isContractsMode && player.everJoinedContract && player.leftContract;
-  const showStayedQuestion = isContractsMode && player.everJoinedContract && !player.leftContract;
+  // 4a für alle, die beim Start beigetreten sind (bedingt und unbedingt), 4b für alle anderen.
+  // Wer später selbst ausgetreten ist, beantwortet zusätzlich 4c.
+  // Wer als bedingtes Mitglied automatisch ausgeschieden ist (leftContract === false), bekommt 4c nicht.
+  const showJoinedQuestion =
+    isContractsMode &&
+    (player.contractJoinChoice === 'YES' ||
+      player.contractJoinChoice === 'CONDITIONAL' ||
+      player.everJoinedContract);
+  const showNotJoinedQuestion = isContractsMode && !showJoinedQuestion;
+  const showLeftQuestion = isContractsMode && player.leftContract;
 
   const [expectedProb, setExpectedProb] = useState<number>(50);
+  const [strategyChoice, setStrategyChoice] = useState<string>('');
   const [reactionToUnfairness, setReactionToUnfairness] = useState<string>('');
-  const [motivationRanking, setMotivationRanking] = useState<string[]>(INITIAL_MOTIVATION_ITEMS);
-  const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
 
-  // Abkommen-Fragen
+  // Abkommen-Fragen (4a, 4b, 4c)
   const [contractJoinedChoice, setContractJoinedChoice] = useState<string>('');
   const [contractJoinedOther, setContractJoinedOther] = useState<string>('');
 
@@ -88,38 +89,17 @@ export const SurveyPage: React.FC<SurveyPageProps> = ({
   const [contractLeftChoice, setContractLeftChoice] = useState<string>('');
   const [contractLeftOther, setContractLeftOther] = useState<string>('');
 
-  const [contractStayedChoice, setContractStayedChoice] = useState<string>('');
-  const [contractStayedOther, setContractStayedOther] = useState<string>('');
+  // Frage 5: Spiel mit tieferem Risiko (0 bis 6 Franken in 30-Rappen-Schritten)
+  const [lowRiskInvestRappen, setLowRiskInvestRappen] = useState<number>(300);
 
+  // Angaben zur Person & Auszahlung
   const [age, setAge] = useState<string>('');
   const [gender, setGender] = useState<string>('');
+  const [payoutMethod, setPayoutMethod] = useState<'TWINT' | 'CASH' | ''>('');
   const [twintPhone, setTwintPhone] = useState<string>('');
 
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-
-  const moveItem = (index: number, direction: -1 | 1) => {
-    const targetIndex = index + direction;
-    if (targetIndex < 0 || targetIndex >= motivationRanking.length) return;
-    const copy = [...motivationRanking];
-    const [removed] = copy.splice(index, 1);
-    copy.splice(targetIndex, 0, removed);
-    setMotivationRanking(copy);
-  };
-
-  const handleDragStart = (idx: number) => {
-    setDraggedIdx(idx);
-  };
-
-  const handleDragOver = (e: React.DragEvent, idx: number) => {
-    e.preventDefault();
-    if (draggedIdx === null || draggedIdx === idx) return;
-    const copy = [...motivationRanking];
-    const [draggedItem] = copy.splice(draggedIdx, 1);
-    copy.splice(idx, 0, draggedItem);
-    setMotivationRanking(copy);
-    setDraggedIdx(idx);
-  };
 
   const resolveOptionValue = (choice: string, otherText: string): string | null => {
     if (!choice) return null;
@@ -133,8 +113,28 @@ export const SurveyPage: React.FC<SurveyPageProps> = ({
     e.preventDefault();
     setError(null);
 
+    if (!strategyChoice) {
+      setError('Bitte wähle eine Antwort bei Frage 2 (Strategie) aus.');
+      return;
+    }
+
     if (!reactionToUnfairness) {
-      setError('Bitte wähle eine Antwort bei Frage 2 aus.');
+      setError('Bitte wähle eine Antwort bei Frage 3 (Reaktion auf tiefe Beiträge) aus.');
+      return;
+    }
+
+    if (showJoinedQuestion && !contractJoinedChoice) {
+      setError('Bitte wähle einen Grund für deinen Beitritt zum Abkommen aus.');
+      return;
+    }
+
+    if (showNotJoinedQuestion && !contractNotJoinedChoice) {
+      setError('Bitte wähle einen Grund aus, warum du dem Abkommen nicht beigetreten bist.');
+      return;
+    }
+
+    if (showLeftQuestion && !contractLeftChoice) {
+      setError('Bitte wähle einen Grund für deinen Austritt aus dem Abkommen aus.');
       return;
     }
 
@@ -149,17 +149,27 @@ export const SurveyPage: React.FC<SurveyPageProps> = ({
       return;
     }
 
-    if (!twintPhone.trim()) {
+    if (!payoutMethod) {
+      setError('Bitte wähle aus, wie du deinen Betrag erhalten möchtest.');
+      return;
+    }
+
+    if (payoutMethod === 'TWINT' && !twintPhone.trim()) {
       setError('Bitte gib deine Telefonnummer für die Twint-Auszahlung an.');
       return;
     }
+
+    const finalPayoutInfo =
+      payoutMethod === 'TWINT'
+        ? twintPhone.trim()
+        : 'Bar (Abholung bei Spielleitung)';
 
     setSubmitting(true);
     try {
       const updated = await submitSurvey({
         expectedProbabilityPct: expectedProb,
         reactionToUnfairness,
-        motivationRanking,
+        motivationRanking: [strategyChoice],
         contractJoinedReason: showJoinedQuestion
           ? resolveOptionValue(contractJoinedChoice, contractJoinedOther)
           : null,
@@ -169,12 +179,11 @@ export const SurveyPage: React.FC<SurveyPageProps> = ({
         contractLeftReason: showLeftQuestion
           ? resolveOptionValue(contractLeftChoice, contractLeftOther)
           : null,
-        contractStayedReason: showStayedQuestion
-          ? resolveOptionValue(contractStayedChoice, contractStayedOther)
-          : null,
+        contractStayedReason: null,
+        lowRiskInvestRappen,
         age: parsedAge,
         gender,
-        twintPhone: twintPhone.trim(),
+        twintPhone: finalPayoutInfo,
       });
       onStateUpdated(updated);
     } catch (err) {
@@ -188,61 +197,71 @@ export const SurveyPage: React.FC<SurveyPageProps> = ({
     <main className="page-container">
       <div className="survey-card">
         <header className="survey-card__header">
-          <div className="round-header__identity">
-            <span className="badge badge--accent">Spieler {player.playerNumber}</span>
-            <span className="badge badge--neutral">Raum {sessionCode}</span>
-            <span className="badge badge--private">Abschluss-Fragebogen</span>
-          </div>
-          <h1>Fragebogen zum Spielverlauf</h1>
+          <h1>Fragebogen zum Spiel</h1>
           <p>
             Alle 10 Runden sind gespielt! Bitte beantworte kurz die folgenden Fragen, bevor das Endresultat und deine Auszahlung angezeigt werden.
           </p>
         </header>
 
         <form onSubmit={handleSubmit} className="survey-form">
-          {/* Frage 1 */}
+          {/* Frage 1: Erwartung zu Beginn */}
           <div className="survey-question">
             <label className="survey-question__title" htmlFor="expectedProbInput">
-              1. Wie wahrscheinlich hast du es zu Beginn des Spiels gefunden, dass eure Gruppe die Zielsumme erreicht? (0–100 %)
+              Wie wahrscheinlich fandest du zu Beginn des Spiels, dass eure Gruppe die 18 Franken erreicht?
             </label>
             <div className="survey-probability-row">
               <input
+                id="expectedProbInput"
                 type="range"
                 min={0}
                 max={100}
-                step={1}
+                step={10}
                 value={expectedProb}
                 onChange={(e) => setExpectedProb(Number(e.target.value))}
                 className="survey-slider"
               />
               <div className="survey-prob-number">
-                <input
-                  id="expectedProbInput"
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={expectedProb}
-                  onChange={(e) =>
-                    setExpectedProb(Math.max(0, Math.min(100, Number(e.target.value) || 0)))
-                  }
-                />
-                <span>%</span>
+                <span>{expectedProb} %</span>
               </div>
             </div>
           </div>
 
-          {/* Frage 2 */}
+          {/* Frage 2: Strategie */}
           <div className="survey-question">
             <span className="survey-question__title">
-              2. Hast du bemerkt, dass andere weniger als den fairen Beitrag eingezahlt haben? Falls ja, wie hast du reagiert?
+              Welche Strategie hast du beim Spielen hauptsächlich verfolgt?
+            </span>
+            <div className="survey-radio-list">
+              {STRATEGY_OPTIONS.map((option) => (
+                <label
+                  key={option}
+                  className={`survey-radio-item ${strategyChoice === option ? 'survey-radio-item--selected' : ''
+                    }`}
+                >
+                  <input
+                    type="radio"
+                    name="strategyChoice"
+                    value={option}
+                    checked={strategyChoice === option}
+                    onChange={() => setStrategyChoice(option)}
+                  />
+                  <span>{option}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Frage 3: Reaktion auf tiefe Beiträge */}
+          <div className="survey-question">
+            <span className="survey-question__title">
+              Haben andere in einer Runde weniger als 30 Rappen eingezahlt? Wie hast du darauf reagiert?
             </span>
             <div className="survey-radio-list">
               {UNFAIRNESS_OPTIONS.map((option) => (
                 <label
                   key={option}
-                  className={`survey-radio-item ${
-                    reactionToUnfairness === option ? 'survey-radio-item--selected' : ''
-                  }`}
+                  className={`survey-radio-item ${reactionToUnfairness === option ? 'survey-radio-item--selected' : ''
+                    }`}
                 >
                   <input
                     type="radio"
@@ -257,64 +276,18 @@ export const SurveyPage: React.FC<SurveyPageProps> = ({
             </div>
           </div>
 
-          {/* Frage 3: Sortierbare Liste */}
-          <div className="survey-question">
-            <span className="survey-question__title">
-              3. Was war dir beim Spielen am wichtigsten?
-            </span>
-            <p className="survey-question__hint">
-              Sortiere die Punkte mit den Pfeilen (oder per Drag & Drop): <strong>Oben (Platz 1) = am wichtigsten</strong>, <strong>Unten (Platz 5) = am unwichtigsten</strong>.
-            </p>
-            <div className="survey-ranking-list">
-              {motivationRanking.map((item, idx) => (
-                <div
-                  key={item}
-                  className="survey-ranking-item"
-                  draggable
-                  onDragStart={() => handleDragStart(idx)}
-                  onDragOver={(e) => handleDragOver(e, idx)}
-                  onDragEnd={() => setDraggedIdx(null)}
-                >
-                  <span className="survey-ranking-item__rank">{idx + 1}.</span>
-                  <span className="survey-ranking-item__text">{item}</span>
-                  <div className="survey-ranking-item__controls">
-                    <button
-                      type="button"
-                      className="btn btn--secondary survey-rank-btn"
-                      disabled={idx === 0}
-                      onClick={() => moveItem(idx, -1)}
-                      title="Nach oben"
-                    >
-                      ↑
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn--secondary survey-rank-btn"
-                      disabled={idx === motivationRanking.length - 1}
-                      onClick={() => moveItem(idx, 1)}
-                      title="Nach unten"
-                    >
-                      ↓
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Abkommen-Fragen: Nur die für diesen Spieler zutreffenden Fragen anzeigen */}
+          {/* Frage 4a: Beigetreten */}
           {showJoinedQuestion && (
             <div className="survey-question">
               <span className="survey-question__title">
-                Was war der wichtigste Grund, warum du dem Abkommen beigetreten bist?
+                Was war der wichtigste Grund für deinen Beitritt zum Abkommen?
               </span>
               <div className="survey-radio-list">
                 {CONTRACT_JOINED_OPTIONS.map((option) => (
                   <label
                     key={option}
-                    className={`survey-radio-item ${
-                      contractJoinedChoice === option ? 'survey-radio-item--selected' : ''
-                    }`}
+                    className={`survey-radio-item ${contractJoinedChoice === option ? 'survey-radio-item--selected' : ''
+                      }`}
                   >
                     <input
                       type="radio"
@@ -339,18 +312,18 @@ export const SurveyPage: React.FC<SurveyPageProps> = ({
             </div>
           )}
 
+          {/* Frage 4b: Nicht beigetreten */}
           {showNotJoinedQuestion && (
             <div className="survey-question">
               <span className="survey-question__title">
-                Was war der wichtigste Grund, warum du dem Abkommen nicht beigetreten bist?
+                Was war der wichtigste Grund, warum du nicht beigetreten bist?
               </span>
               <div className="survey-radio-list">
                 {CONTRACT_NOT_JOINED_OPTIONS.map((option) => (
                   <label
                     key={option}
-                    className={`survey-radio-item ${
-                      contractNotJoinedChoice === option ? 'survey-radio-item--selected' : ''
-                    }`}
+                    className={`survey-radio-item ${contractNotJoinedChoice === option ? 'survey-radio-item--selected' : ''
+                      }`}
                   >
                     <input
                       type="radio"
@@ -375,18 +348,18 @@ export const SurveyPage: React.FC<SurveyPageProps> = ({
             </div>
           )}
 
+          {/* Frage 4c: Selbst ausgetreten */}
           {showLeftQuestion && (
             <div className="survey-question">
               <span className="survey-question__title">
-                Was war der wichtigste Grund für deinen Austritt aus dem Abkommen?
+                Was war der wichtigste Grund für deinen Austritt?
               </span>
               <div className="survey-radio-list">
                 {CONTRACT_LEFT_OPTIONS.map((option) => (
                   <label
                     key={option}
-                    className={`survey-radio-item ${
-                      contractLeftChoice === option ? 'survey-radio-item--selected' : ''
-                    }`}
+                    className={`survey-radio-item ${contractLeftChoice === option ? 'survey-radio-item--selected' : ''
+                      }`}
                   >
                     <input
                       type="radio"
@@ -411,47 +384,33 @@ export const SurveyPage: React.FC<SurveyPageProps> = ({
             </div>
           )}
 
-          {showStayedQuestion && (
-            <div className="survey-question">
-              <span className="survey-question__title">
-                Was war der wichtigste Grund, warum du im Abkommen geblieben bist?
-              </span>
-              <div className="survey-radio-list">
-                {CONTRACT_STAYED_OPTIONS.map((option) => (
-                  <label
-                    key={option}
-                    className={`survey-radio-item ${
-                      contractStayedChoice === option ? 'survey-radio-item--selected' : ''
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="contractStayed"
-                      value={option}
-                      checked={contractStayedChoice === option}
-                      onChange={() => setContractStayedChoice(option)}
-                    />
-                    <span>{option === 'OTHER' ? 'Anderer Grund:' : option}</span>
-                  </label>
-                ))}
-                {contractStayedChoice === 'OTHER' && (
-                  <input
-                    type="text"
-                    className="survey-text-input"
-                    placeholder="Bitte Grund angeben..."
-                    value={contractStayedOther}
-                    onChange={(e) => setContractStayedOther(e.target.value)}
-                  />
-                )}
+          {/* Frage 5: Spiel mit tieferem Risiko */}
+          <div className="survey-question">
+            <label className="survey-question__title" htmlFor="lowRiskInput">
+              Stell dir vor, du spielst das gleiche Spiel nochmals, aber mit einer neuen Gruppe. Alles bleibt gleich, nur eine Regel ändert sich: Erreicht die Gruppe das Ziel nicht, verlieren alle ihr Geld nur mit 50 % statt mit 90 % Wahrscheinlichkeit. Wie viel würdest du über alle 10 Runden insgesamt einzahlen?
+            </label>
+            <div className="survey-probability-row">
+              <input
+                id="lowRiskInput"
+                type="range"
+                min={0}
+                max={600}
+                step={30}
+                value={lowRiskInvestRappen}
+                onChange={(e) => setLowRiskInvestRappen(Number(e.target.value))}
+                className="survey-slider"
+              />
+              <div className="survey-prob-number" style={{ minWidth: '80px', justifyContent: 'flex-end' }}>
+                <span>{formatFr(lowRiskInvestRappen)}</span>
               </div>
             </div>
-          )}
+          </div>
 
-          {/* Demografie & Twint */}
+          {/* Angaben zur Person */}
           <div className="survey-demographics-grid">
             <div className="survey-question">
               <label className="survey-question__title" htmlFor="surveyAgeInput">
-                4. Wie alt bist du?
+                Wie alt bist du?
               </label>
               <input
                 id="surveyAgeInput"
@@ -467,14 +426,15 @@ export const SurveyPage: React.FC<SurveyPageProps> = ({
             </div>
 
             <div className="survey-question">
-              <span className="survey-question__title">5. Geschlecht</span>
-              <div className="survey-radio-inline">
-                {['Mann', 'Frau', 'Keine Angabe'].map((g) => (
+              <span className="survey-question__title">
+                Bitte wähle dein Geschlecht aus.
+              </span>
+              <div className="survey-radio-list">
+                {GENDER_OPTIONS.map((g) => (
                   <label
                     key={g}
-                    className={`survey-radio-item ${
-                      gender === g ? 'survey-radio-item--selected' : ''
-                    }`}
+                    className={`survey-radio-item ${gender === g ? 'survey-radio-item--selected' : ''
+                      }`}
                   >
                     <input
                       type="radio"
@@ -490,19 +450,60 @@ export const SurveyPage: React.FC<SurveyPageProps> = ({
             </div>
           </div>
 
+          {/* Auszahlung */}
           <div className="survey-question">
-            <label className="survey-question__title" htmlFor="surveyTwintInput">
-              6. Auf welche Telefonnummer sollte dein Betrag ausgezahlt werden über Twint?
-            </label>
-            <input
-              id="surveyTwintInput"
-              type="tel"
-              placeholder="z.B. 079 123 45 67"
-              value={twintPhone}
-              onChange={(e) => setTwintPhone(e.target.value)}
-              className="survey-text-input"
-              required
-            />
+            <span className="survey-question__title">
+              Wie möchtest du deinen Betrag erhalten?
+            </span>
+            <div className="survey-radio-list">
+              <label
+                className={`survey-radio-item ${payoutMethod === 'TWINT' ? 'survey-radio-item--selected' : ''
+                  }`}
+              >
+                <input
+                  type="radio"
+                  name="payoutMethod"
+                  value="TWINT"
+                  checked={payoutMethod === 'TWINT'}
+                  onChange={() => setPayoutMethod('TWINT')}
+                />
+                <span>Per Twint</span>
+              </label>
+
+              {payoutMethod === 'TWINT' && (
+                <div style={{ marginTop: '0.35rem' }}>
+                  <label
+                    htmlFor="surveyTwintInput"
+                    style={{ display: 'block', fontWeight: 600, marginBottom: '0.35rem', fontSize: '0.9rem' }}
+                  >
+                    Telefonnummer
+                  </label>
+                  <input
+                    id="surveyTwintInput"
+                    type="tel"
+                    placeholder="z.B. 079 123 45 67"
+                    value={twintPhone}
+                    onChange={(e) => setTwintPhone(e.target.value)}
+                    className="survey-text-input"
+                    required
+                  />
+                </div>
+              )}
+
+              <label
+                className={`survey-radio-item ${payoutMethod === 'CASH' ? 'survey-radio-item--selected' : ''
+                  }`}
+              >
+                <input
+                  type="radio"
+                  name="payoutMethod"
+                  value="CASH"
+                  checked={payoutMethod === 'CASH'}
+                  onChange={() => setPayoutMethod('CASH')}
+                />
+                <span>Bar. Ich komme nach dem Spiel zur Spielleitung nach vorne.</span>
+              </label>
+            </div>
           </div>
 
           {error && <div className="alert alert--error">{error}</div>}

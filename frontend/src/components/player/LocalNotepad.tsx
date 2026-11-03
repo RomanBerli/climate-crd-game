@@ -5,10 +5,6 @@ interface LocalNotepadProps {
   onChange: (value: string) => void;
 }
 
-/**
- * Dauerhafter digitaler Notizblock (Spec 1.4 & 2.1).
- * Rein lokal im Browser-State gehalten, niemals an den Server übermittelt.
- */
 export const LocalNotepad: React.FC<LocalNotepadProps> = ({ notes, onChange }) => {
   return (
     <aside className="notepad-card">
@@ -19,7 +15,7 @@ export const LocalNotepad: React.FC<LocalNotepadProps> = ({ notes, onChange }) =
         className="notepad-card__textarea"
         value={notes}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="Eigene Notizen & Rechnungen (z. B. bisherige Rundenbeiträge, Ziel 12 Fr.)..."
+        placeholder="Eigene Notizen & Rechnungen..."
         rows={12}
       />
     </aside>

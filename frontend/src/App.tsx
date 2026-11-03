@@ -46,7 +46,7 @@ export const App: React.FC = () => {
     return (
       <main className="page-container page-container--centered">
         <div className="loading-card">
-          <span className="pulse-indicator">Verbinde mit Klima-Labor Server...</span>
+          <span className="pulse-indicator">Verbinde mit Server...</span>
         </div>
       </main>
     );
