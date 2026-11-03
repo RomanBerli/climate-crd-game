@@ -14,10 +14,10 @@ public record SubmitSurveyRequest(
         @Max(value = 100, message = "Wahrscheinlichkeit darf maximal 100% sein.")
         Integer expectedProbabilityPct,
 
-        @NotBlank(message = "Bitte wählen Sie eine Antwort zur Reaktion auf unfaire Beiträge.")
+        @NotBlank(message = "Bitte wählen Sie eine Antwort zur Reaktion auf tiefe Beiträge.")
         String reactionToUnfairness,
 
-        @NotEmpty(message = "Bitte sortieren Sie die Prioritäten.")
+        @NotEmpty(message = "Bitte wählen Sie Ihre Strategie aus.")
         List<String> motivationRanking,
 
         String contractJoinedReason,
@@ -30,10 +30,38 @@ public record SubmitSurveyRequest(
         @Max(value = 120, message = "Bitte ein gültiges Alter eingeben.")
         Integer age,
 
-        @NotBlank(message = "Bitte wählen Sie Ihre Identifikation aus.")
+        @NotBlank(message = "Bitte wählen Sie Ihr Geschlecht aus.")
         String gender,
 
-        @NotBlank(message = "Bitte geben Sie eine Twint-Telefonnummer für die Auszahlung an.")
-        String twintPhone
+        @NotBlank(message = "Bitte wählen Sie Ihre gewünschte Auszahlungsart.")
+        String twintPhone,
+
+        Integer lowRiskInvestRappen
 ) {
+    public SubmitSurveyRequest(
+            Integer expectedProbabilityPct,
+            String reactionToUnfairness,
+            List<String> motivationRanking,
+            String contractJoinedReason,
+            String contractNotJoinedReason,
+            String contractLeftReason,
+            String contractStayedReason,
+            Integer age,
+            String gender,
+            String twintPhone
+    ) {
+        this(
+                expectedProbabilityPct,
+                reactionToUnfairness,
+                motivationRanking,
+                contractJoinedReason,
+                contractNotJoinedReason,
+                contractLeftReason,
+                contractStayedReason,
+                age,
+                gender,
+                twintPhone,
+                null
+        );
+    }
 }

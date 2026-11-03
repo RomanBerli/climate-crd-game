@@ -18,6 +18,7 @@ export interface SubmitSurveyPayload {
   contractNotJoinedReason?: string | null;
   contractLeftReason?: string | null;
   contractStayedReason?: string | null;
+  lowRiskInvestRappen?: number | null;
   age: number;
   gender: string;
   twintPhone: string;

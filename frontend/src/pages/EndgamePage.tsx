@@ -8,16 +8,11 @@ interface EndgamePageProps {
   onResetSession: () => Promise<void>;
 }
 
-/**
- * Statischer Milinski-Endbildschirm:
- * Zeigt Spielernummer, Session-Code, unmissverständlichen Ergebnis-Textblock,
- * den auszuzahlenden Endbetrag in Franken sowie die vollständige Tabelle aller Rundenbeiträge aller Spieler.
- */
 export const EndgamePage: React.FC<EndgamePageProps> = ({
   gameState,
   onResetSession,
 }) => {
-  const { player, sessionCode, endgame, history, groupSize } = gameState;
+  const { player, endgame, history, groupSize } = gameState;
   const payoutRappen = endgame ? endgame.finalPayoutRappen : player.finalPayoutRappen ?? 0;
 
   const isSuccess = endgame?.isGoalReached === true;
@@ -39,18 +34,10 @@ export const EndgamePage: React.FC<EndgamePageProps> = ({
   return (
     <main className="page-container">
       <section className="endgame-card">
-        <div className="endgame-card__identifiers">
+        <div className="endgame-card__identifiers" style={{ gridTemplateColumns: '1fr' }}>
           <div className="endgame-id-box">
             <span className="endgame-id-box__label">Ihre Identifikation</span>
             <strong className="endgame-id-box__value">Spieler {player.playerNumber}</strong>
-          </div>
-          <div className="endgame-id-box">
-            <span className="endgame-id-box__label">Session-Code</span>
-            <strong className="endgame-id-box__value">{sessionCode}</strong>
-          </div>
-          <div className="endgame-id-box">
-            <span className="endgame-id-box__label">Risiko-Wahrscheinlichkeit</span>
-            <strong className="endgame-id-box__value">{gameState.riskPercent}% Risiko</strong>
           </div>
         </div>
 
@@ -63,21 +50,21 @@ export const EndgamePage: React.FC<EndgamePageProps> = ({
               : 'endgame-result-banner--loss'
           }`}
         >
-          <h1>Experiment abgeschlossen (10 / 10 Runden)</h1>
+          <h1>Spiel abgeschlossen (10 / 10 Runden)</h1>
           <p className="endgame-result-banner__message">
             {endgame?.message ||
-              'Das Experiment ist beendet. Bitte zeigen Sie diesen Bildschirm dem Versuchsleiter zur Auszahlung.'}
+              'Das Spiel ist beendet. Bitte zeigen Sie diesen Bildschirm der Spielleitung zur Auszahlung.'}
           </p>
         </div>
 
         <div className="endgame-payout-display">
           <span className="endgame-payout-display__label">
-            Ihr finaler Auszahlungsbetrag (Spieler {player.playerNumber} • Raum {sessionCode})
+            Ihr finaler Auszahlungsbetrag (Spieler {player.playerNumber})
           </span>
           <strong className="endgame-payout-display__amount">{formatFr(payoutRappen)}</strong>
           <div className="endgame-payout-display__breakdown">
             <span>
-              Klimafonds Total: {formatFr(gameState.totalPotRappen)} / {formatFr(gameState.targetSumRappen)}
+              Gruppentopf Total: {formatFr(gameState.totalPotRappen)} / {formatFr(gameState.targetSumRappen)}
             </span>
             <span>•</span>
             <span>Startkapital: {formatFr(player.initialBalanceRappen)}</span>

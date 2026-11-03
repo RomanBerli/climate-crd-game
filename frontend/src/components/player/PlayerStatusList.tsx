@@ -1,25 +1,78 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { GameMode, PlayerSlotStatusDto } from '../../types/game';
 
 interface PlayerStatusListProps {
   playersStatus: PlayerSlotStatusDto[];
   myPlayerNumber: number;
   gameMode?: GameMode;
+  inContract?: boolean;
+  canLeaveContract?: boolean;
+  currentRound?: number;
+  totalRounds?: number;
+  onLeaveContract?: () => Promise<void>;
 }
 
 export const PlayerStatusList: React.FC<PlayerStatusListProps> = ({
   playersStatus,
   myPlayerNumber,
   gameMode = 'NORMAL',
+  inContract = false,
+  canLeaveContract = false,
+  currentRound = 1,
+  totalRounds = 10,
+  onLeaveContract,
 }) => {
-  // Nur im Vertragsmodus anzeigen, wer im Abkommen ist (keine Bereit-/Überlegt-Anzeige)
+  const [leavingContract, setLeavingContract] = useState<boolean>(false);
+
   if (gameMode !== 'WITH_CONTRACTS') {
     return null;
   }
 
+  const handleLeave = async () => {
+    if (!onLeaveContract || leavingContract || !canLeaveContract) return;
+    setLeavingContract(true);
+    try {
+      await onLeaveContract();
+    } finally {
+      setLeavingContract(false);
+    }
+  };
+
+  const showLeaveButton = inContract && currentRound < totalRounds && Boolean(onLeaveContract);
+
   return (
     <section className="player-status-card">
-      <h3 className="section-title">Abkommen-Status der Gruppe</h3>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '0.75rem',
+          marginBottom: '0.85rem',
+        }}
+      >
+        <h3 className="section-title" style={{ marginBottom: 0 }}>
+          Abkommen
+        </h3>
+
+        {showLeaveButton && (
+          <button
+            type="button"
+            className="btn btn--ghost"
+            disabled={!canLeaveContract || leavingContract}
+            onClick={handleLeave}
+            style={{ padding: '0.4rem 0.85rem', fontSize: '0.85rem' }}
+          >
+            {leavingContract
+              ? 'Wird gespeichert...'
+              : canLeaveContract
+              ? 'In der nächsten Runde Abkommen verlassen'
+              : 'Austritt für nächste Runde vorgemerkt'}
+          </button>
+        )}
+      </div>
+
       <div className="player-status-grid">
         {playersStatus.map((slot) => {
           const isMe = slot.playerNumber === myPlayerNumber;
@@ -41,10 +94,10 @@ export const PlayerStatusList: React.FC<PlayerStatusListProps> = ({
                 }}
               >
                 {slot.inContract
-                  ? '📜 Im Abkommen'
+                  ? 'Im Abkommen'
                   : slot.leftContract
                   ? 'Ausgetreten'
-                  : 'Kein Abkommen'}
+                  : 'Nicht dabei'}
               </div>
             </div>
           );

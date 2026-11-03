@@ -262,17 +262,20 @@ class ClimateGameIntegrationTest {
             }
         }
 
-        // Verify Player 3 (CONDITIONAL) became a member
+        // Verify Player 3 (CONDITIONAL) became a member and can schedule leaving for the next round
         GameStateResponse p3StateR1 = gameEngineService.getPlayerGameState(players.get(2).sessionToken());
         assertThat(p3StateR1.player().inContract()).isTrue();
         assertThat(p3StateR1.player().contractJoinChoice()).isEqualTo("CONDITIONAL");
-        assertThat(p3StateR1.contractState().canLeaveContractNow()).isFalse();
+        assertThat(p3StateR1.contractState().canLeaveContractNow()).isTrue();
 
-        // Round 1: Leaving contract is NOT allowed in Round 1 ( neither before nor after investing )
-        assertThatThrownBy(() -> gameEngineService.leaveContract(players.get(0).sessionToken()))
-                .isInstanceOf(ResponseStatusException.class);
+        // Round 1 BEFORE investing: Player 1 schedules leaving the contract for Round 2
+        GameStateResponse p1ScheduledExit = gameEngineService.leaveContract(players.get(0).sessionToken());
+        // In Round 1, Player 1 is STILL in the contract and must still pay at least the minimum (20 Rappen)
+        assertThat(p1ScheduledExit.player().inContract()).isTrue();
+        assertThat(p1ScheduledExit.contractState().canLeaveContractNow()).isFalse();
+        assertThat(p1ScheduledExit.contractState().memberCount()).isEqualTo(4);
 
-        // Round 1: Player 1 (contract member) cannot invest 0 Rappen (5% = 20 Rappen minimum enforced)
+        // Round 1: Player 1 (still contract member in Round 1) cannot invest 0 Rappen (5% = 20 Rappen minimum enforced)
         assertThatThrownBy(() -> gameEngineService.submitInvestment(players.get(0).sessionToken(), 0))
                 .isInstanceOf(ResponseStatusException.class);
 
@@ -280,27 +283,23 @@ class ClimateGameIntegrationTest {
         gameEngineService.submitInvestment(players.get(4).sessionToken(), 0);
         gameEngineService.submitInvestment(players.get(5).sessionToken(), 0);
 
-        // Contract members 1..4 invest 20 Rappen each
+        // Contract members 1..4 invest 20 Rappen each in Round 1
         for (int i = 0; i < 4; i++) {
             gameEngineService.submitInvestment(players.get(i).sessionToken(), 20);
         }
 
-        // Still in Round 1 after investing -> leaving still not allowed until Round 2
-        assertThatThrownBy(() -> gameEngineService.leaveContract(players.get(0).sessionToken()))
-                .isInstanceOf(ResponseStatusException.class);
-
-        // Admin advances to Round 2 -> goes directly to INVESTMENT (no intermediate phase)
+        // Admin advances to Round 2 -> Player 1's scheduled exit takes effect at the start of Round 2!
         AdminSessionResponse round2Admin = adminService.advanceRound(created.id());
         assertThat(round2Admin.currentRound()).isEqualTo(2);
         assertThat(round2Admin.roundPhase()).isEqualTo(RoundPhase.INVESTMENT);
 
-        // In Round 2 BEFORE investing: Player 1 leaves the contract for free and can immediately invest 0 Rappen
-        GameStateResponse p1AfterExit = gameEngineService.leaveContract(players.get(0).sessionToken());
-        assertThat(p1AfterExit.player().inContract()).isFalse();
-        assertThat(p1AfterExit.player().leftContract()).isTrue();
-        assertThat(p1AfterExit.player().currentBalanceRappen()).isEqualTo(380);
-        assertThat(p1AfterExit.contractState().memberCount()).isEqualTo(3);
+        GameStateResponse p1InRound2 = gameEngineService.getPlayerGameState(players.get(0).sessionToken());
+        assertThat(p1InRound2.player().inContract()).isFalse();
+        assertThat(p1InRound2.player().leftContract()).isTrue();
+        assertThat(p1InRound2.player().currentBalanceRappen()).isEqualTo(380);
+        assertThat(p1InRound2.contractState().memberCount()).isEqualTo(3);
 
+        // Player 1 can now invest 0 Rappen in Round 2
         gameEngineService.submitInvestment(players.get(0).sessionToken(), 0);
 
         // Players 2, 3, 4 invest 20 Rappen in Round 2
@@ -310,11 +309,10 @@ class ClimateGameIntegrationTest {
         gameEngineService.submitInvestment(players.get(4).sessionToken(), 0);
         gameEngineService.submitInvestment(players.get(5).sessionToken(), 0);
 
-        // In Round 2 AFTER investing: Player 2 also decides to leave the contract for future rounds
-        GameStateResponse p2AfterExit = gameEngineService.leaveContract(players.get(1).sessionToken());
-        assertThat(p2AfterExit.player().inContract()).isFalse();
-        assertThat(p2AfterExit.player().leftContract()).isTrue();
-        assertThat(p2AfterExit.contractState().memberCount()).isEqualTo(2);
+        // In Round 2 AFTER investing: Player 2 also decides to leave the contract for Round 3
+        GameStateResponse p2ScheduledExit = gameEngineService.leaveContract(players.get(1).sessionToken());
+        assertThat(p2ScheduledExit.player().inContract()).isTrue();
+        assertThat(p2ScheduledExit.contractState().canLeaveContractNow()).isFalse();
 
         // Verify RoundInfo CSV tracks contract_join_choice and left_contract_at_round
         String roundInfoCsv = adminService.exportSessionCsv(created.id(), "round_info");

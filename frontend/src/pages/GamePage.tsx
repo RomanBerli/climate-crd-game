@@ -60,20 +60,28 @@ export const GamePage: React.FC<GamePageProps> = ({
               onStateUpdated={onStateUpdated}
             />
           ) : (
-            <InvestmentButtons
-              initialBalanceRappen={gameState.player.initialBalanceRappen}
-              currentBalanceRappen={gameState.player.currentBalanceRappen}
-              allowedOptions={gameState.player.allowedInvestmentOptions}
-              hasSubmitted={gameState.player.hasSubmittedCurrentRound}
-              submittedAmount={gameState.player.currentRoundInvestmentRappen}
-              allPlayersReady={allPlayersReady}
-              inContract={gameState.player.inContract}
-              canLeaveContract={gameState.contractState?.canLeaveContractNow ?? false}
-              minInvestmentRappen={gameState.contractState?.minInvestmentRappen ?? 0}
-              lastContractEvent={gameState.contractState?.lastContractEvent ?? null}
-              onInvest={handleInvest}
-              onLeaveContract={handleLeaveContract}
-            />
+            <>
+              <PlayerStatusList
+                playersStatus={gameState.playersStatus}
+                myPlayerNumber={gameState.player.playerNumber}
+                gameMode={gameState.gameMode}
+                inContract={gameState.player.inContract}
+                canLeaveContract={gameState.contractState?.canLeaveContractNow ?? false}
+                currentRound={gameState.currentRound}
+                totalRounds={gameState.totalRounds}
+                onLeaveContract={handleLeaveContract}
+              />
+
+              <InvestmentButtons
+                initialBalanceRappen={gameState.player.initialBalanceRappen}
+                currentBalanceRappen={gameState.player.currentBalanceRappen}
+                allowedOptions={gameState.player.allowedInvestmentOptions}
+                hasSubmitted={gameState.player.hasSubmittedCurrentRound}
+                submittedAmount={gameState.player.currentRoundInvestmentRappen}
+                allPlayersReady={allPlayersReady}
+                onInvest={handleInvest}
+              />
+            </>
           )}
 
           <HistoryTable
@@ -81,12 +89,6 @@ export const GamePage: React.FC<GamePageProps> = ({
             myPlayerNumber={gameState.player.playerNumber}
             groupSize={gameState.groupSize}
             initialBalanceRappen={gameState.player.initialBalanceRappen}
-          />
-
-          <PlayerStatusList
-            playersStatus={gameState.playersStatus}
-            myPlayerNumber={gameState.player.playerNumber}
-            gameMode={gameState.gameMode}
           />
         </div>
 

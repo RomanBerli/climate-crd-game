@@ -8,9 +8,6 @@ interface RoundHeaderProps {
 
 export const RoundHeader: React.FC<RoundHeaderProps> = ({ gameState }) => {
   const {
-    sessionCode,
-    gameMode,
-    contractState,
     currentRound,
     totalRounds,
     targetSumRappen,
@@ -21,22 +18,10 @@ export const RoundHeader: React.FC<RoundHeaderProps> = ({ gameState }) => {
     <header className="round-header">
       <div className="round-header__identity">
         <span className="badge badge--accent">Spieler {player.playerNumber}</span>
-        <span className="badge badge--neutral">Raum {sessionCode}</span>
-        {gameMode === 'WITH_CONTRACTS' && (
-          <span className="badge badge--risk">
-            {player.inContract
-              ? `📜 Im Abkommen (${contractState.memberCount} Mitgl.)`
-              : contractState.contractAbolished
-              ? 'Abkommen aufgelöst'
-              : player.leftContract
-              ? 'Aus Abkommen ausgetreten'
-              : 'Ohne Abkommen'}
-          </span>
-        )}
       </div>
 
       <div className="round-header__round">
-        <span className="round-header__label">Aktuelle Runde</span>
+        <span className="round-header__label">Runde</span>
         <strong className="round-header__value">
           {currentRound} <span className="round-header__total">/ {totalRounds}</span>
         </strong>
@@ -44,14 +29,8 @@ export const RoundHeader: React.FC<RoundHeaderProps> = ({ gameState }) => {
 
       <div className="round-header__metrics">
         <div className="metric-box">
-          <span className="metric-box__label">Gruppen-Klimaziel (10 Runden)</span>
+          <span className="metric-box__label">Gruppenziel</span>
           <strong className="metric-box__value">{formatFr(targetSumRappen)}</strong>
-        </div>
-        <div className="metric-box metric-box--highlight">
-          <span className="metric-box__label">Ihr aktuelles Restguthaben</span>
-          <strong className="metric-box__value metric-box__value--balance">
-            {formatFr(player.currentBalanceRappen)}
-          </strong>
         </div>
       </div>
     </header>
