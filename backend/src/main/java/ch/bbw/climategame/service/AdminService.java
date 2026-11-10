@@ -268,7 +268,7 @@ public class AdminService {
 
             sb.append(csvEscape(session.getCode())).append(',')
                     .append(p.getPlayerNumber()).append(',')
-                    .append(survey != null ? survey.getExpectedProbabilityPct() : "").append(',')
+                    .append(survey != null && survey.getExpectedProbabilityPct() != null ? survey.getExpectedProbabilityPct() : "").append(',')
                     .append(csvEscape(survey != null ? survey.getReactionToUnfairness() : "")).append(',')
                     .append(csvEscape(survey != null ? survey.getMotivationRanking() : "")).append(',')
                     .append(csvEscape(survey != null ? survey.getContractJoinedReason() : "")).append(',')
@@ -376,7 +376,7 @@ public class AdminService {
                     .append(p != null && p.isLeftContract()).append(',')
                     .append(p != null && p.isInContract()).append(',')
                     .append(p != null && p.getLeftContractAtRound() != null ? p.getLeftContractAtRound() : "").append(',')
-                    .append(survey != null ? survey.getExpectedProbabilityPct() : "").append(',')
+                    .append(survey != null && survey.getExpectedProbabilityPct() != null ? survey.getExpectedProbabilityPct() : "").append(',')
                     .append(csvEscape(survey != null ? survey.getReactionToUnfairness() : "")).append(',')
                     .append(csvEscape(survey != null ? survey.getMotivationRanking() : "")).append(',')
                     .append(csvEscape(survey != null ? survey.getContractJoinedReason() : "")).append(',')

@@ -9,7 +9,6 @@ import jakarta.validation.constraints.NotNull;
 import java.util.List;
 
 public record SubmitSurveyRequest(
-        @NotNull(message = "Bitte schätzen Sie die Wahrscheinlichkeit (0–100%).")
         @Min(value = 0, message = "Wahrscheinlichkeit muss mindestens 0% sein.")
         @Max(value = 100, message = "Wahrscheinlichkeit darf maximal 100% sein.")
         Integer expectedProbabilityPct,
