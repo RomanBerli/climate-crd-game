@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { fetchAdminSessions } from '../api/adminApi';
+import { fetchAdminConfig, fetchAdminSessions } from '../api/adminApi';
 import { ApiError } from '../api/client';
 import { AdminSessionResponse } from '../types/game';
 
 interface UseAdminPollingResult {
   sessions: AdminSessionResponse[];
+  groupSize: number | null;
   loading: boolean;
   error: string | null;
   unauthorized: boolean;
@@ -13,6 +14,7 @@ interface UseAdminPollingResult {
 
 export function useAdminPolling(adminKey: string, enabled: boolean = true): UseAdminPollingResult {
   const [sessions, setSessions] = useState<AdminSessionResponse[]>([]);
+  const [groupSize, setGroupSize] = useState<number | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [unauthorized, setUnauthorized] = useState<boolean>(false);
@@ -22,8 +24,16 @@ export function useAdminPolling(adminKey: string, enabled: boolean = true): UseA
     if (!enabled || !adminKey || isFetchingRef.current) return;
     isFetchingRef.current = true;
     try {
-      const data = await fetchAdminSessions(adminKey);
+      const [data, config] = await Promise.all([
+        fetchAdminSessions(adminKey),
+        fetchAdminConfig(adminKey).catch(() => null),
+      ]);
       setSessions(data);
+      if (config && typeof config.groupSize === 'number') {
+        setGroupSize(config.groupSize);
+      } else if (data.length > 0) {
+        setGroupSize(data[0].groupSize);
+      }
       setError(null);
       setUnauthorized(false);
     } catch (err) {
@@ -53,6 +63,7 @@ export function useAdminPolling(adminKey: string, enabled: boolean = true): UseA
 
   return {
     sessions,
+    groupSize,
     loading,
     error,
     unauthorized,

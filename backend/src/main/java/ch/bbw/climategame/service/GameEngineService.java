@@ -446,7 +446,7 @@ public class GameEngineService {
         survey.setSession(session);
         survey.setPlayer(tokenPlayer);
         survey.setPlayerNumber(tokenPlayer.getPlayerNumber());
-        survey.setExpectedProbabilityPct(request.expectedProbabilityPct());
+        survey.setExpectedProbabilityPct(request.expectedProbabilityPct() != null ? request.expectedProbabilityPct() : 0);
         survey.setReactionToUnfairness(request.reactionToUnfairness().trim());
         survey.setMotivationRanking(formattedRanking);
         survey.setContractJoinedReason(cleanNullable(request.contractJoinedReason()));

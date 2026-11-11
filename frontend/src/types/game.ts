@@ -11,7 +11,7 @@ export interface JoinLobbyResponse {
 }
 
 export interface SubmitSurveyPayload {
-  expectedProbabilityPct: number;
+  expectedProbabilityPct?: number | null;
   reactionToUnfairness: string;
   motivationRanking: string[];
   contractJoinedReason?: string | null;

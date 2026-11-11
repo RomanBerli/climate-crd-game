@@ -25,6 +25,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBackToPlayerView }) => {
 
   const {
     sessions,
+    groupSize,
     loading,
     error,
     unauthorized,
@@ -174,7 +175,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBackToPlayerView }) => {
         <div className="alert alert--error">{actionError || error}</div>
       )}
 
-      <CreateSessionModal onCreateSession={handleCreateSession} />
+      <CreateSessionModal onCreateSession={handleCreateSession} groupSize={groupSize} />
 
       <section className="admin-sessions-list">
         <div className="admin-sessions-list__header">
@@ -184,7 +185,8 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBackToPlayerView }) => {
 
         {sessions.length === 0 ? (
           <div className="history-empty">
-            Noch keine Sessions vorhanden. Erstellen Sie oben einen neuen 6er-Gruppenraum.
+            Noch keine Sessions vorhanden. Erstellen Sie oben einen neuen{' '}
+            {groupSize ? `${groupSize}er-` : ''}Gruppenraum.
           </div>
         ) : (
           sessions.map((session) => (

@@ -3,6 +3,7 @@ import { GameMode } from '../../types/game';
 
 interface CreateSessionModalProps {
   onCreateSession: (gameMode: GameMode) => Promise<void>;
+  groupSize?: number | null;
 }
 
 const GAME_MODES: Array<{
@@ -28,7 +29,10 @@ const GAME_MODES: Array<{
   },
 ];
 
-export const CreateSessionModal: React.FC<CreateSessionModalProps> = ({ onCreateSession }) => {
+export const CreateSessionModal: React.FC<CreateSessionModalProps> = ({
+  onCreateSession,
+  groupSize,
+}) => {
   const [selectedMode, setSelectedMode] = useState<GameMode>('NORMAL');
   const [creating, setCreating] = useState<boolean>(false);
 
@@ -81,7 +85,11 @@ export const CreateSessionModal: React.FC<CreateSessionModalProps> = ({ onCreate
       </div>
 
       <button type="submit" className="btn btn--primary" disabled={creating}>
-        {creating ? 'Raum wird erstellt...' : '+ Neuen Gruppenraum (6 Spieler) generieren'}
+        {creating
+          ? 'Raum wird erstellt...'
+          : groupSize
+          ? `+ Neuen Gruppenraum (${groupSize} Spieler) generieren`
+          : '+ Neuen Gruppenraum generieren'}
       </button>
     </form>
   );

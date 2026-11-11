@@ -40,8 +40,8 @@ public class PlayerSurvey {
     @Column(name = "player_number", nullable = false)
     private int playerNumber;
 
-    @Column(name = "expected_probability_pct", nullable = false)
-    private int expectedProbabilityPct;
+    @Column(name = "expected_probability_pct")
+    private Integer expectedProbabilityPct;
 
     @Column(name = "reaction_to_unfairness", length = 255, nullable = false)
     private String reactionToUnfairness;
@@ -115,11 +115,11 @@ public class PlayerSurvey {
         this.playerNumber = playerNumber;
     }
 
-    public int getExpectedProbabilityPct() {
+    public Integer getExpectedProbabilityPct() {
         return expectedProbabilityPct;
     }
 
-    public void setExpectedProbabilityPct(int expectedProbabilityPct) {
+    public void setExpectedProbabilityPct(Integer expectedProbabilityPct) {
         this.expectedProbabilityPct = expectedProbabilityPct;
     }
 

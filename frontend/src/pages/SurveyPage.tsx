@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { GameStateResponse } from '../types/game';
 import { submitSurvey } from '../api/gameApi';
-import { formatFr } from '../utils/currency';
 
 interface SurveyPageProps {
   gameState: GameStateResponse;
@@ -64,9 +63,9 @@ export const SurveyPage: React.FC<SurveyPageProps> = ({
   const { player, gameMode } = gameState;
   const isContractsMode = gameMode === 'WITH_CONTRACTS';
 
-  // 4a für alle, die beim Start beigetreten sind (bedingt und unbedingt), 4b für alle anderen.
-  // Wer später selbst ausgetreten ist, beantwortet zusätzlich 4c.
-  // Wer als bedingtes Mitglied automatisch ausgeschieden ist (leftContract === false), bekommt 4c nicht.
+  // 3a für alle, die beim Start beigetreten sind (bedingt und unbedingt), 3b für alle anderen.
+  // Wer später selbst ausgetreten ist, beantwortet zusätzlich 3c.
+  // Wer als bedingtes Mitglied automatisch ausgeschieden ist (leftContract === false), bekommt 3c nicht.
   const showJoinedQuestion =
     isContractsMode &&
     (player.contractJoinChoice === 'YES' ||
@@ -75,11 +74,10 @@ export const SurveyPage: React.FC<SurveyPageProps> = ({
   const showNotJoinedQuestion = isContractsMode && !showJoinedQuestion;
   const showLeftQuestion = isContractsMode && player.leftContract;
 
-  const [expectedProb, setExpectedProb] = useState<number>(50);
   const [strategyChoice, setStrategyChoice] = useState<string>('');
   const [reactionToUnfairness, setReactionToUnfairness] = useState<string>('');
 
-  // Abkommen-Fragen (4a, 4b, 4c)
+  // Abkommen-Fragen (3a, 3b, 3c)
   const [contractJoinedChoice, setContractJoinedChoice] = useState<string>('');
   const [contractJoinedOther, setContractJoinedOther] = useState<string>('');
 
@@ -88,9 +86,6 @@ export const SurveyPage: React.FC<SurveyPageProps> = ({
 
   const [contractLeftChoice, setContractLeftChoice] = useState<string>('');
   const [contractLeftOther, setContractLeftOther] = useState<string>('');
-
-  // Frage 5: Spiel mit tieferem Risiko (0 bis 6 Franken in 30-Rappen-Schritten)
-  const [lowRiskInvestRappen, setLowRiskInvestRappen] = useState<number>(300);
 
   // Angaben zur Person & Auszahlung
   const [age, setAge] = useState<string>('');
@@ -114,12 +109,12 @@ export const SurveyPage: React.FC<SurveyPageProps> = ({
     setError(null);
 
     if (!strategyChoice) {
-      setError('Bitte wähle eine Antwort bei Frage 2 (Strategie) aus.');
+      setError('Bitte wähle eine Antwort bei Frage 1 (Strategie) aus.');
       return;
     }
 
     if (!reactionToUnfairness) {
-      setError('Bitte wähle eine Antwort bei Frage 3 (Reaktion auf tiefe Beiträge) aus.');
+      setError('Bitte wähle eine Antwort bei Frage 2 (Reaktion auf tiefe Beiträge) aus.');
       return;
     }
 
@@ -167,7 +162,7 @@ export const SurveyPage: React.FC<SurveyPageProps> = ({
     setSubmitting(true);
     try {
       const updated = await submitSurvey({
-        expectedProbabilityPct: expectedProb,
+        expectedProbabilityPct: null,
         reactionToUnfairness,
         motivationRanking: [strategyChoice],
         contractJoinedReason: showJoinedQuestion
@@ -180,7 +175,7 @@ export const SurveyPage: React.FC<SurveyPageProps> = ({
           ? resolveOptionValue(contractLeftChoice, contractLeftOther)
           : null,
         contractStayedReason: null,
-        lowRiskInvestRappen,
+        lowRiskInvestRappen: null,
         age: parsedAge,
         gender,
         twintPhone: finalPayoutInfo,
@@ -204,29 +199,7 @@ export const SurveyPage: React.FC<SurveyPageProps> = ({
         </header>
 
         <form onSubmit={handleSubmit} className="survey-form">
-          {/* Frage 1: Erwartung zu Beginn */}
-          <div className="survey-question">
-            <label className="survey-question__title" htmlFor="expectedProbInput">
-              Wie wahrscheinlich fandest du zu Beginn des Spiels, dass eure Gruppe die 18 Franken erreicht?
-            </label>
-            <div className="survey-probability-row">
-              <input
-                id="expectedProbInput"
-                type="range"
-                min={0}
-                max={100}
-                step={10}
-                value={expectedProb}
-                onChange={(e) => setExpectedProb(Number(e.target.value))}
-                className="survey-slider"
-              />
-              <div className="survey-prob-number">
-                <span>{expectedProb} %</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Frage 2: Strategie */}
+          {/* Frage 1: Strategie */}
           <div className="survey-question">
             <span className="survey-question__title">
               Welche Strategie hast du beim Spielen hauptsächlich verfolgt?
@@ -251,7 +224,7 @@ export const SurveyPage: React.FC<SurveyPageProps> = ({
             </div>
           </div>
 
-          {/* Frage 3: Reaktion auf tiefe Beiträge */}
+          {/* Frage 2: Reaktion auf tiefe Beiträge */}
           <div className="survey-question">
             <span className="survey-question__title">
               Haben andere in einer Runde weniger als 30 Rappen eingezahlt? Wie hast du darauf reagiert?
@@ -276,7 +249,7 @@ export const SurveyPage: React.FC<SurveyPageProps> = ({
             </div>
           </div>
 
-          {/* Frage 4a: Beigetreten */}
+          {/* Frage 3a: Beigetreten */}
           {showJoinedQuestion && (
             <div className="survey-question">
               <span className="survey-question__title">
@@ -312,7 +285,7 @@ export const SurveyPage: React.FC<SurveyPageProps> = ({
             </div>
           )}
 
-          {/* Frage 4b: Nicht beigetreten */}
+          {/* Frage 3b: Nicht beigetreten */}
           {showNotJoinedQuestion && (
             <div className="survey-question">
               <span className="survey-question__title">
@@ -348,7 +321,7 @@ export const SurveyPage: React.FC<SurveyPageProps> = ({
             </div>
           )}
 
-          {/* Frage 4c: Selbst ausgetreten */}
+          {/* Frage 3c: Selbst ausgetreten */}
           {showLeftQuestion && (
             <div className="survey-question">
               <span className="survey-question__title">
@@ -384,28 +357,6 @@ export const SurveyPage: React.FC<SurveyPageProps> = ({
             </div>
           )}
 
-          {/* Frage 5: Spiel mit tieferem Risiko */}
-          <div className="survey-question">
-            <label className="survey-question__title" htmlFor="lowRiskInput">
-              Stell dir vor, du spielst das gleiche Spiel nochmals, aber mit einer neuen Gruppe. Alles bleibt gleich, nur eine Regel ändert sich: Erreicht die Gruppe das Ziel nicht, verlieren alle ihr Geld nur mit 50 % statt mit 90 % Wahrscheinlichkeit. Wie viel würdest du über alle 10 Runden insgesamt einzahlen?
-            </label>
-            <div className="survey-probability-row">
-              <input
-                id="lowRiskInput"
-                type="range"
-                min={0}
-                max={600}
-                step={30}
-                value={lowRiskInvestRappen}
-                onChange={(e) => setLowRiskInvestRappen(Number(e.target.value))}
-                className="survey-slider"
-              />
-              <div className="survey-prob-number" style={{ minWidth: '80px', justifyContent: 'flex-end' }}>
-                <span>{formatFr(lowRiskInvestRappen)}</span>
-              </div>
-            </div>
-          </div>
-
           {/* Angaben zur Person */}
           <div className="survey-demographics-grid">
             <div className="survey-question">
@@ -427,7 +378,7 @@ export const SurveyPage: React.FC<SurveyPageProps> = ({
 
             <div className="survey-question">
               <span className="survey-question__title">
-                Bitte wähle dein Geschlecht aus.
+                Welchem Geschlecht fühlst du dich zugehörig?
               </span>
               <div className="survey-radio-list">
                 {GENDER_OPTIONS.map((g) => (

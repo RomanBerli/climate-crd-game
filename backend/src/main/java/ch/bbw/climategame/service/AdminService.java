@@ -241,16 +241,14 @@ public class AdminService {
     }
 
     @Transactional(readOnly = true)
+    public int getGroupSize() {
+        return gameEngineService.getGroupSize();
+    }
+
+    @Transactional(readOnly = true)
     public String exportSurveyCsv(UUID sessionId) {
         GameSession session = findSessionOrThrow(sessionId);
         List<Player> players = playerRepository.findBySessionIdOrderByPlayerNumberAsc(session.getId());
-        List<RoundInvestment> investments = investmentRepository
-                .findBySessionIdOrderByRoundNumberAscPlayerNumberAsc(session.getId());
-        Map<Integer, Integer> totalInvestedByPlayer = investments.stream()
-                .collect(Collectors.groupingBy(
-                        RoundInvestment::getPlayerNumber,
-                        Collectors.summingInt(RoundInvestment::getAmountRappen)
-                ));
         Map<Integer, PlayerSurvey> surveyByNumber = surveyRepository
                 .findBySessionIdOrderByPlayerNumberAsc(session.getId())
                 .stream()
@@ -258,25 +256,18 @@ public class AdminService {
 
         StringBuilder sb = new StringBuilder();
         sb.append('\uFEFF');
-        sb.append("session_code,player_number,survey_expected_probability_pct,survey_reaction_unfairness,survey_motivation_ranking,survey_contract_joined_reason,survey_contract_not_joined_reason,survey_contract_left_reason,survey_contract_stayed_reason,survey_low_risk_invest_rappen,survey_low_risk_diff_rappen,survey_age,survey_gender\n");
+        sb.append("session_code,player_number,survey_strategy,survey_reaction_unfairness,survey_contract_joined_reason,survey_contract_not_joined_reason,survey_contract_left_reason,survey_age,survey_gender\n");
 
         for (Player p : players) {
             PlayerSurvey survey = surveyByNumber.get(p.getPlayerNumber());
-            int playerTotalInvested = totalInvestedByPlayer.getOrDefault(p.getPlayerNumber(), 0);
-            Integer lowRiskRappen = survey != null ? survey.getLowRiskInvestRappen() : null;
-            String lowRiskDiffStr = lowRiskRappen != null ? String.valueOf(lowRiskRappen - playerTotalInvested) : "";
 
             sb.append(csvEscape(session.getCode())).append(',')
                     .append(p.getPlayerNumber()).append(',')
-                    .append(survey != null ? survey.getExpectedProbabilityPct() : "").append(',')
-                    .append(csvEscape(survey != null ? survey.getReactionToUnfairness() : "")).append(',')
                     .append(csvEscape(survey != null ? survey.getMotivationRanking() : "")).append(',')
+                    .append(csvEscape(survey != null ? survey.getReactionToUnfairness() : "")).append(',')
                     .append(csvEscape(survey != null ? survey.getContractJoinedReason() : "")).append(',')
                     .append(csvEscape(survey != null ? survey.getContractNotJoinedReason() : "")).append(',')
                     .append(csvEscape(survey != null ? survey.getContractLeftReason() : "")).append(',')
-                    .append(csvEscape(survey != null ? survey.getContractStayedReason() : "")).append(',')
-                    .append(lowRiskRappen != null ? lowRiskRappen : "").append(',')
-                    .append(lowRiskDiffStr).append(',')
                     .append(survey != null ? survey.getAge() : "").append(',')
                     .append(csvEscape(survey != null ? survey.getGender() : ""))
                     .append('\n');
@@ -339,7 +330,7 @@ public class AdminService {
         StringBuilder sb = new StringBuilder();
         // UTF-8 BOM für korrekte Umlaute in Microsoft Excel
         sb.append('\uFEFF');
-        sb.append("session_code,game_mode,target_sum_rappen,total_invested_rappen,target_reached,risk_occurred,round,player_number,invested_rappen,invested_chf,submitted_at,currently_in_contract,player_total_invested_rappen,balance_before_risk_rappen,final_payout_rappen,final_payout_chf,contract_join_choice,ever_joined_contract,left_contract,in_contract_at_end,left_contract_at_round,survey_expected_probability_pct,survey_reaction_unfairness,survey_motivation_ranking,survey_contract_joined_reason,survey_contract_not_joined_reason,survey_contract_left_reason,survey_contract_stayed_reason,survey_low_risk_invest_rappen,survey_low_risk_diff_rappen,survey_age,survey_gender\n");
+        sb.append("session_code,game_mode,target_sum_rappen,total_invested_rappen,target_reached,risk_occurred,round,player_number,invested_rappen,invested_chf,submitted_at,currently_in_contract,player_total_invested_rappen,balance_before_risk_rappen,final_payout_rappen,final_payout_chf,contract_join_choice,ever_joined_contract,left_contract,in_contract_at_end,left_contract_at_round,survey_strategy,survey_reaction_unfairness,survey_contract_joined_reason,survey_contract_not_joined_reason,survey_contract_left_reason,survey_age,survey_gender\n");
 
         for (RoundInvestment inv : investments) {
             Player p = playerByNumber.get(inv.getPlayerNumber());
@@ -352,8 +343,6 @@ public class AdminService {
 
             String investedChf = String.format(Locale.US, "%.2f", inv.getAmountRappen() / 100.0);
             String finalPayoutChf = String.format(Locale.US, "%.2f", finalPayoutRappen / 100.0);
-            Integer lowRiskRappen = survey != null ? survey.getLowRiskInvestRappen() : null;
-            String lowRiskDiffStr = lowRiskRappen != null ? String.valueOf(lowRiskRappen - playerTotalInvested) : "";
 
             sb.append(csvEscape(session.getCode())).append(',')
                     .append(csvEscape(session.getGameMode().name())).append(',')
@@ -376,15 +365,11 @@ public class AdminService {
                     .append(p != null && p.isLeftContract()).append(',')
                     .append(p != null && p.isInContract()).append(',')
                     .append(p != null && p.getLeftContractAtRound() != null ? p.getLeftContractAtRound() : "").append(',')
-                    .append(survey != null ? survey.getExpectedProbabilityPct() : "").append(',')
-                    .append(csvEscape(survey != null ? survey.getReactionToUnfairness() : "")).append(',')
                     .append(csvEscape(survey != null ? survey.getMotivationRanking() : "")).append(',')
+                    .append(csvEscape(survey != null ? survey.getReactionToUnfairness() : "")).append(',')
                     .append(csvEscape(survey != null ? survey.getContractJoinedReason() : "")).append(',')
                     .append(csvEscape(survey != null ? survey.getContractNotJoinedReason() : "")).append(',')
                     .append(csvEscape(survey != null ? survey.getContractLeftReason() : "")).append(',')
-                    .append(csvEscape(survey != null ? survey.getContractStayedReason() : "")).append(',')
-                    .append(lowRiskRappen != null ? lowRiskRappen : "").append(',')
-                    .append(lowRiskDiffStr).append(',')
                     .append(survey != null ? survey.getAge() : "").append(',')
                     .append(csvEscape(survey != null ? survey.getGender() : ""))
                     .append('\n');

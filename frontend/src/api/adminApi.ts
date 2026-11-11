@@ -9,6 +9,10 @@ function adminHeaders(customKey?: string): Record<string, string> {
   };
 }
 
+export async function fetchAdminConfig(adminKey?: string): Promise<{ groupSize: number }> {
+  return apiRequest<{ groupSize: number }>('/api/admin/config', { method: 'GET' }, adminHeaders(adminKey));
+}
+
 export async function fetchAdminSessions(adminKey?: string): Promise<AdminSessionResponse[]> {
   return apiRequest<AdminSessionResponse[]>('/api/admin/sessions', { method: 'GET' }, adminHeaders(adminKey));
 }
