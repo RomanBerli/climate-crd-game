@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -42,6 +43,11 @@ public class AdminController {
         GameMode mode = request != null && request.gameMode() != null ? request.gameMode() : GameMode.NORMAL;
         AdminSessionResponse created = adminService.createSession(mode);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
+    }
+
+    @GetMapping("/config")
+    public ResponseEntity<Map<String, Integer>> getConfig() {
+        return ResponseEntity.ok(Map.of("groupSize", adminService.getGroupSize()));
     }
 
     @GetMapping("/sessions")

@@ -200,7 +200,7 @@ class ClimateGameIntegrationTest {
         String[] allLines = allCsv.trim().split("\n");
         // 1 header + 60 investment rows (10 rounds * 6 players)
         assertThat(allLines).hasSize(61);
-        assertThat(allLines[0]).contains("survey_expected_probability_pct,survey_reaction_unfairness,survey_motivation_ranking");
+        assertThat(allLines[0]).contains("survey_strategy,survey_reaction_unfairness,survey_contract_joined_reason,survey_contract_not_joined_reason,survey_contract_left_reason,survey_age,survey_gender");
         assertThat(allCsv).doesNotContain("079 999 88 77");
         assertThat(allCsv).contains("Frau");
 
