@@ -73,6 +73,8 @@ export const GamePage: React.FC<GamePageProps> = ({
               />
 
               <InvestmentButtons
+                key={gameState.currentRound}
+                isLastRound={gameState.currentRound >= gameState.totalRounds}
                 initialBalanceRappen={gameState.player.initialBalanceRappen}
                 currentBalanceRappen={gameState.player.currentBalanceRappen}
                 allowedOptions={gameState.player.allowedInvestmentOptions}
@@ -84,12 +86,15 @@ export const GamePage: React.FC<GamePageProps> = ({
             </>
           )}
 
-          <HistoryTable
-            history={gameState.history}
-            myPlayerNumber={gameState.player.playerNumber}
-            groupSize={gameState.groupSize}
-            initialBalanceRappen={gameState.player.initialBalanceRappen}
-          />
+          {gameState.roundPhase === 'INVESTMENT' && (
+            <HistoryTable
+              history={gameState.history}
+              myPlayerNumber={gameState.player.playerNumber}
+              groupSize={gameState.groupSize}
+              initialBalanceRappen={gameState.player.initialBalanceRappen}
+              currentRound={gameState.currentRound}
+            />
+          )}
         </div>
 
         <div className="game-main-grid__right">

@@ -2,7 +2,10 @@ import React, { useEffect, useState } from 'react';
 import {
   advanceAdminRound,
   createAdminSession,
+  deleteUnfinishedSession,
   fetchAdminSessions,
+  removeLobbyPlayer,
+  setPlayerRejoinAllowed,
   startAdminSession,
 } from '../api/adminApi';
 import { getStoredAdminSecret, setStoredAdminSecret } from '../api/client';
@@ -105,6 +108,36 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBackToPlayerView }) => {
     }
   };
 
+  const handleRemovePlayer = async (sessionId: string, playerNumber: number) => {
+    setActionError(null);
+    try {
+      await removeLobbyPlayer(sessionId, playerNumber, adminKey);
+      await refreshSessions();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Fehler beim Entfernen des Spielers.');
+    }
+  };
+
+  const handleSetRejoinAllowed = async (sessionId: string, playerNumber: number, allowed: boolean) => {
+    setActionError(null);
+    try {
+      await setPlayerRejoinAllowed(sessionId, playerNumber, allowed, adminKey);
+      await refreshSessions();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Fehler bei der Geräte-Freigabe.');
+    }
+  };
+
+  const handleDeleteSession = async (sessionId: string) => {
+    setActionError(null);
+    try {
+      await deleteUnfinishedSession(sessionId, adminKey);
+      await refreshSessions();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Fehler beim Abbrechen der Session.');
+    }
+  };
+
   if (!isAuthenticated) {
     return (
       <main className="page-container page-container--centered">
@@ -196,6 +229,9 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBackToPlayerView }) => {
               adminKey={adminKey}
               onStart={handleStart}
               onAdvanceRound={handleAdvanceRound}
+              onRemovePlayer={handleRemovePlayer}
+              onSetRejoinAllowed={handleSetRejoinAllowed}
+              onDeleteSession={handleDeleteSession}
             />
           ))
         )}

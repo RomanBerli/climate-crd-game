@@ -46,7 +46,7 @@ class ClimateGameIntegrationTest {
     private MockMvc mockMvc;
 
     @Test
-    void lobbyLeaveRemovesPlayerImmediatelyAndInactivePlayerIsKickedAfter30s() {
+    void lobbyLeaveRemovesPlayerImmediatelyAndInactivePlayerStaysUntilAdminRemovesHim() {
         AdminSessionResponse session = adminService.createSession(GameMode.NORMAL);
 
         // Player 1 joins and leaves via UI
@@ -63,15 +63,172 @@ class ClimateGameIntegrationTest {
         JoinLobbyResponse p1New = gameEngineService.joinLobby(session.code(), null);
         assertThat(p1New.playerNumber()).isEqualTo(1);
 
-        // Simulate Player 1 being inactive (not polling) for > 30 seconds
+        // Player 1 is inactive (locked phone / background tab) for 10 minutes while the rules are explained
         Player entity = playerRepository.findBySessionToken(p1New.sessionToken()).orElseThrow();
-        entity.setLastSeenAt(Instant.now().minusSeconds(35));
+        entity.setLastSeenAt(Instant.now().minusSeconds(600));
         playerRepository.save(entity);
 
-        // Next check kicks inactive player automatically
-        assertThat(adminService.getSession(session.id()).connectedPlayersCount()).isEqualTo(0);
+        // He is NOT kicked automatically any more and can continue with his token
+        AdminSessionResponse afterIdle = adminService.getSession(session.id());
+        assertThat(afterIdle.connectedPlayersCount()).isEqualTo(1);
+        assertThat(afterIdle.players().get(0).secondsSinceLastSeen()).isGreaterThanOrEqualTo(599);
+        assertThat(gameEngineService.getPlayerGameState(p1New.sessionToken()).player().playerNumber()).isEqualTo(1);
+
+        // The admin can free the slot manually
+        AdminSessionResponse afterRemove = adminService.removeLobbyPlayer(session.id(), 1);
+        assertThat(afterRemove.connectedPlayersCount()).isEqualTo(0);
         assertThatThrownBy(() -> gameEngineService.getPlayerGameState(p1New.sessionToken()))
                 .isInstanceOf(ResponseStatusException.class);
+    }
+
+    @Test
+    void lostDeviceCanRejoinRunningGameOnlyAfterAdminAllowsIt() {
+        AdminSessionResponse session = adminService.createSession(GameMode.NORMAL);
+        List<JoinLobbyResponse> players = new ArrayList<>();
+        for (int i = 1; i <= 6; i++) {
+            players.add(gameEngineService.joinLobby(session.code(), null));
+        }
+        adminService.startSession(session.id());
+        gameEngineService.submitInvestment(players.get(2).sessionToken(), 40);
+
+        // "Leaving" during a running game must not invalidate the token (would block the whole group)
+        gameEngineService.leaveLobby(players.get(0).sessionToken());
+        assertThat(gameEngineService.getPlayerGameState(players.get(0).sessionToken()).player().playerNumber()).isEqualTo(1);
+
+        // Removing players is only possible in the lobby
+        assertThatThrownBy(() -> adminService.removeLobbyPlayer(session.id(), 3))
+                .isInstanceOf(ResponseStatusException.class);
+
+        // A new device without token is rejected ...
+        assertThatThrownBy(() -> gameEngineService.joinLobby(session.code(), null))
+                .isInstanceOf(ResponseStatusException.class);
+
+        // ... until the admin allows a new device for player 3
+        AdminSessionResponse allowed = adminService.setRejoinAllowed(session.id(), 3, true);
+        assertThat(allowed.players().get(2).rejoinAllowed()).isTrue();
+
+        JoinLobbyResponse rejoined = gameEngineService.joinLobby(session.code(), null);
+        assertThat(rejoined.playerNumber()).isEqualTo(3);
+        assertThat(rejoined.sessionToken()).isNotEqualTo(players.get(2).sessionToken());
+
+        // Same player, same game state; the old token is dead and the permission is used up
+        GameStateResponse state = gameEngineService.getPlayerGameState(rejoined.sessionToken());
+        assertThat(state.player().currentBalanceRappen()).isEqualTo(360);
+        assertThat(state.player().hasSubmittedCurrentRound()).isTrue();
+        assertThatThrownBy(() -> gameEngineService.getPlayerGameState(players.get(2).sessionToken()))
+                .isInstanceOf(ResponseStatusException.class);
+        assertThat(adminService.getSession(session.id()).players().get(2).rejoinAllowed()).isFalse();
+        assertThatThrownBy(() -> gameEngineService.joinLobby(session.code(), null))
+                .isInstanceOf(ResponseStatusException.class);
+    }
+
+    @Test
+    void unfinishedSessionCanBeAbortedButFinishedSessionIsProtected() {
+        AdminSessionResponse session = adminService.createSession(GameMode.WITH_CONTRACTS);
+        List<JoinLobbyResponse> players = new ArrayList<>();
+        for (int i = 1; i <= 6; i++) {
+            players.add(gameEngineService.joinLobby(session.code(), null));
+        }
+        adminService.startSession(session.id());
+        for (JoinLobbyResponse p : players) {
+            gameEngineService.submitContractJoin(p.sessionToken(), "YES");
+        }
+        gameEngineService.submitInvestment(players.get(0).sessionToken(), 20);
+
+        adminService.deleteUnfinishedSession(session.id());
+        assertThatThrownBy(() -> adminService.getSession(session.id()))
+                .isInstanceOf(ResponseStatusException.class);
+        // Devices fall back to the code entry because their token is gone
+        assertThatThrownBy(() -> gameEngineService.getPlayerGameState(players.get(0).sessionToken()))
+                .isInstanceOf(ResponseStatusException.class);
+
+        // A finished session holds experiment data and cannot be deleted
+        AdminSessionResponse finished = adminService.createSession(GameMode.NORMAL);
+        List<JoinLobbyResponse> finishedPlayers = new ArrayList<>();
+        for (int i = 1; i <= 6; i++) {
+            finishedPlayers.add(gameEngineService.joinLobby(finished.code(), null));
+        }
+        adminService.startSession(finished.id());
+        for (int round = 1; round <= 10; round++) {
+            for (JoinLobbyResponse p : finishedPlayers) {
+                gameEngineService.submitInvestment(p.sessionToken(), 0);
+            }
+            adminService.advanceRound(finished.id());
+        }
+        assertThatThrownBy(() -> adminService.deleteUnfinishedSession(finished.id()))
+                .isInstanceOf(ResponseStatusException.class);
+        assertThat(adminService.getSession(finished.id()).status()).isEqualTo(SessionStatus.FINISHED);
+    }
+
+    @Test
+    void joinDecisionsStayHiddenUntilEveryoneDecidedAndConditionalNonMemberNeverJoined() {
+        AdminSessionResponse session = adminService.createSession(GameMode.WITH_CONTRACTS);
+        List<JoinLobbyResponse> players = new ArrayList<>();
+        for (int i = 1; i <= 6; i++) {
+            players.add(gameEngineService.joinLobby(session.code(), null));
+        }
+        adminService.startSession(session.id());
+
+        // 1x YES, 1x CONDITIONAL, 4x NO -> condition (>= 3) not fulfilled
+        gameEngineService.submitContractJoin(players.get(0).sessionToken(), "YES");
+        gameEngineService.submitContractJoin(players.get(1).sessionToken(), "CONDITIONAL");
+
+        // While the join phase is open nobody (neither players nor the admin screen) sees who said yes
+        GameStateResponse open = gameEngineService.getPlayerGameState(players.get(3).sessionToken());
+        assertThat(open.playersStatus()).noneMatch(slot -> slot.inContract());
+        assertThat(open.contractState().memberCount()).isEqualTo(0);
+        AdminSessionResponse adminOpen = adminService.getSession(session.id());
+        assertThat(adminOpen.contractMemberCount()).isEqualTo(0);
+        assertThat(adminOpen.players()).noneMatch(p -> p.inContract());
+
+        for (int i = 2; i < 6; i++) {
+            gameEngineService.submitContractJoin(players.get(i).sessionToken(), "NO");
+        }
+
+        GameStateResponse yesPlayer = gameEngineService.getPlayerGameState(players.get(0).sessionToken());
+        assertThat(yesPlayer.player().inContract()).isTrue();
+        assertThat(yesPlayer.contractState().memberCount()).isEqualTo(1);
+
+        // The conditional player never became a member -> survey must show "not joined" (3b), not 3a
+        GameStateResponse conditional = gameEngineService.getPlayerGameState(players.get(1).sessionToken());
+        assertThat(conditional.player().contractJoinChoice()).isEqualTo("CONDITIONAL");
+        assertThat(conditional.player().inContract()).isFalse();
+        assertThat(conditional.player().everJoinedContract()).isFalse();
+        assertThat(conditional.player().allowedInvestmentOptions()).contains(0);
+    }
+
+    @Test
+    void contributionsOfCurrentRoundBecomeVisibleAsSoonAsAllPlayersDecided() {
+        AdminSessionResponse session = adminService.createSession(GameMode.NORMAL);
+        List<JoinLobbyResponse> players = new ArrayList<>();
+        for (int i = 1; i <= 6; i++) {
+            players.add(gameEngineService.joinLobby(session.code(), null));
+        }
+        adminService.startSession(session.id());
+
+        for (int round = 1; round <= 10; round++) {
+            for (int i = 0; i < 5; i++) {
+                GameStateResponse partial = gameEngineService.submitInvestment(players.get(i).sessionToken(), 20);
+                // As long as one player is missing, the current round stays hidden (simultaneous decisions)
+                if (round == 1) {
+                    assertThat(partial.history()).isEmpty();
+                } else {
+                    assertThat(partial.history()).hasSize(1);
+                    assertThat(partial.history().get(0).round()).isEqualTo(round - 1);
+                }
+            }
+            gameEngineService.submitInvestment(players.get(5).sessionToken(), 40);
+
+            // All six decided -> everybody sees this round immediately, before the admin starts the next one
+            GameStateResponse complete = gameEngineService.getPlayerGameState(players.get(0).sessionToken());
+            assertThat(complete.currentRound()).isEqualTo(round);
+            assertThat(complete.history()).hasSize(1);
+            assertThat(complete.history().get(0).round()).isEqualTo(round);
+            assertThat(complete.history().get(0).roundTotalRappen()).isEqualTo(140);
+            assertThat(complete.totalPotRappen()).isEqualTo(0);
+
+            adminService.advanceRound(session.id());
+        }
     }
 
     @Test
@@ -189,7 +346,7 @@ class ClimateGameIntegrationTest {
             assertThat(afterSurvey.endgame()).isNotNull();
             assertThat(afterSurvey.endgame().isGoalReached()).isTrue();
             assertThat(afterSurvey.endgame().finalPayoutRappen()).isEqualTo(200);
-            assertThat(afterSurvey.endgame().message()).isEqualTo("Klimaziel erreicht! Ihr Restguthaben wird ausbezahlt.");
+            assertThat(afterSurvey.endgame().message()).isEqualTo("Klimaziel erreicht! Dein Restguthaben wird ausbezahlt.");
         }
 
         AdminSessionResponse surveyReadyState = adminService.getSession(created.id());

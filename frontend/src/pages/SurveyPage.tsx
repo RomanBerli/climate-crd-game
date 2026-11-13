@@ -56,6 +56,11 @@ const CONTRACT_LEFT_OPTIONS = [
 
 const GENDER_OPTIONS = ['männlich', 'weiblich', 'keine Angabe'];
 
+// Schweizer Handynummer (Twint): 07x xxx xx xx, +41 7x ... oder 0041 7x ...
+const SWISS_MOBILE_PATTERN = /^(?:\+41|0041|0)7[5-9]\d{7}$/;
+// Freitext «Anderer Grund»: begrenzt, damit die Antwort sicher gespeichert werden kann.
+const OTHER_REASON_MAX_LENGTH = 300;
+
 export const SurveyPage: React.FC<SurveyPageProps> = ({
   gameState,
   onStateUpdated,
@@ -63,14 +68,10 @@ export const SurveyPage: React.FC<SurveyPageProps> = ({
   const { player, gameMode } = gameState;
   const isContractsMode = gameMode === 'WITH_CONTRACTS';
 
-  // 3a für alle, die beim Start beigetreten sind (bedingt und unbedingt), 3b für alle anderen.
-  // Wer später selbst ausgetreten ist, beantwortet zusätzlich 3c.
-  // Wer als bedingtes Mitglied automatisch ausgeschieden ist (leftContract === false), bekommt 3c nicht.
-  const showJoinedQuestion =
-    isContractsMode &&
-    (player.contractJoinChoice === 'YES' ||
-      player.contractJoinChoice === 'CONDITIONAL' ||
-      player.everJoinedContract);
+  // 3a nur für Spieler, die tatsächlich Mitglied des Abkommens wurden (unbedingt, oder bedingt mit
+  // erfüllter Bedingung). Wer «bedingt» wählte, aber mangels genügend Bereiter nie Mitglied wurde,
+  // ist nicht beigetreten und bekommt 3b. Wer später selbst ausgetreten ist, beantwortet zusätzlich 3c.
+  const showJoinedQuestion = isContractsMode && player.everJoinedContract;
   const showNotJoinedQuestion = isContractsMode && !showJoinedQuestion;
   const showLeftQuestion = isContractsMode && player.leftContract;
 
@@ -118,6 +119,9 @@ export const SurveyPage: React.FC<SurveyPageProps> = ({
       return;
     }
 
+    const otherTextMissing = (choice: string, otherText: string) =>
+      choice === 'OTHER' && otherText.trim().length === 0;
+
     if (showJoinedQuestion && !contractJoinedChoice) {
       setError('Bitte wähle einen Grund für deinen Beitritt zum Abkommen aus.');
       return;
@@ -130,6 +134,15 @@ export const SurveyPage: React.FC<SurveyPageProps> = ({
 
     if (showLeftQuestion && !contractLeftChoice) {
       setError('Bitte wähle einen Grund für deinen Austritt aus dem Abkommen aus.');
+      return;
+    }
+
+    if (
+      (showJoinedQuestion && otherTextMissing(contractJoinedChoice, contractJoinedOther)) ||
+      (showNotJoinedQuestion && otherTextMissing(contractNotJoinedChoice, contractNotJoinedOther)) ||
+      (showLeftQuestion && otherTextMissing(contractLeftChoice, contractLeftOther))
+    ) {
+      setError('Du hast «Anderer Grund» gewählt. Bitte schreibe deinen Grund ins Textfeld.');
       return;
     }
 
@@ -151,6 +164,11 @@ export const SurveyPage: React.FC<SurveyPageProps> = ({
 
     if (payoutMethod === 'TWINT' && !twintPhone.trim()) {
       setError('Bitte gib deine Telefonnummer für die Twint-Auszahlung an.');
+      return;
+    }
+
+    if (payoutMethod === 'TWINT' && !SWISS_MOBILE_PATTERN.test(twintPhone.replace(/[\s\-./()]/g, ''))) {
+      setError('Bitte gib eine gültige Schweizer Handynummer ein (z. B. 079 123 45 67).');
       return;
     }
 
@@ -194,7 +212,7 @@ export const SurveyPage: React.FC<SurveyPageProps> = ({
         <header className="survey-card__header">
           <h1>Fragebogen zum Spiel</h1>
           <p>
-            Alle 10 Runden sind gespielt! Bitte beantworte kurz die folgenden Fragen, bevor das Endresultat und deine Auszahlung angezeigt werden.
+            Alle {gameState.totalRounds} Runden sind gespielt! Bitte beantworte kurz die folgenden Fragen, bevor das Endresultat und deine Auszahlung angezeigt werden.
           </p>
         </header>
 
@@ -277,6 +295,7 @@ export const SurveyPage: React.FC<SurveyPageProps> = ({
                     type="text"
                     className="survey-text-input"
                     placeholder="Bitte Grund angeben..."
+                    maxLength={OTHER_REASON_MAX_LENGTH}
                     value={contractJoinedOther}
                     onChange={(e) => setContractJoinedOther(e.target.value)}
                   />
@@ -313,6 +332,7 @@ export const SurveyPage: React.FC<SurveyPageProps> = ({
                     type="text"
                     className="survey-text-input"
                     placeholder="Bitte Grund angeben..."
+                    maxLength={OTHER_REASON_MAX_LENGTH}
                     value={contractNotJoinedOther}
                     onChange={(e) => setContractNotJoinedOther(e.target.value)}
                   />
@@ -349,6 +369,7 @@ export const SurveyPage: React.FC<SurveyPageProps> = ({
                     type="text"
                     className="survey-text-input"
                     placeholder="Bitte Grund angeben..."
+                    maxLength={OTHER_REASON_MAX_LENGTH}
                     value={contractLeftOther}
                     onChange={(e) => setContractLeftOther(e.target.value)}
                   />
