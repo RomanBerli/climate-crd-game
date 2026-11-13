@@ -7,12 +7,14 @@ interface HistoryTableProps {
   myPlayerNumber: number;
   groupSize: number;
   initialBalanceRappen?: number;
+  currentRound?: number;
 }
 
 export const HistoryTable: React.FC<HistoryTableProps> = ({
   history,
   myPlayerNumber,
   groupSize,
+  currentRound,
 }) => {
   const playerColumns = Array.from({ length: groupSize }, (_, i) => i + 1);
   const lastRoundEntry = history.length > 0 ? history[history.length - 1] : null;
@@ -22,14 +24,16 @@ export const HistoryTable: React.FC<HistoryTableProps> = ({
       <div className="history-card__header">
         <h3 className="section-title" style={{ marginBottom: 0 }}>
           {lastRoundEntry
-            ? `Ergebnis der letzten Runde (Runde ${lastRoundEntry.round})`
-            : 'Ergebnis der letzten Runde'}
+            ? lastRoundEntry.round === currentRound
+              ? `Beiträge dieser Runde (Runde ${lastRoundEntry.round})`
+              : `Beiträge der letzten Runde (Runde ${lastRoundEntry.round})`
+            : 'Beiträge der Runde'}
         </h3>
       </div>
 
       {!lastRoundEntry ? (
         <div className="history-empty">
-          Runde 1 läuft. Sobald Runde 1 abgeschlossen ist, sehen Sie hier die Einzelbeiträge der letzten Runde.
+          Sobald alle Spieler in Runde 1 entschieden haben, siehst du hier, wie viel jeder eingezahlt hat.
         </div>
       ) : (
         <div className="history-table-wrapper">
@@ -42,7 +46,7 @@ export const HistoryTable: React.FC<HistoryTableProps> = ({
                     className={pNum === myPlayerNumber ? 'history-table__col--me' : ''}
                   >
                     Spieler {pNum}
-                    {pNum === myPlayerNumber ? ' (Sie)' : ''}
+                    {pNum === myPlayerNumber ? ' (du)' : ''}
                   </th>
                 ))}
                 <th>Runden-Total</th>

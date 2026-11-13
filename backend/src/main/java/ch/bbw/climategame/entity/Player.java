@@ -78,6 +78,18 @@ public class Player {
     @Column(name = "last_seen_at", nullable = false)
     private Instant lastSeenAt;
 
+    /** Von der Spielleitung gesetzt: Ein neues Gerät darf diesen Spieler per Raumcode übernehmen. */
+    @Column(name = "rejoin_allowed", nullable = false, columnDefinition = "boolean default false")
+    private boolean rejoinAllowed = false;
+
+    public boolean isRejoinAllowed() {
+        return rejoinAllowed;
+    }
+
+    public void setRejoinAllowed(boolean rejoinAllowed) {
+        this.rejoinAllowed = rejoinAllowed;
+    }
+
     @PrePersist
     protected void onCreate() {
         if (this.lastSeenAt == null) {

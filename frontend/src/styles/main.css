@@ -763,11 +763,100 @@ body {
   transition: transform 0.12s ease, border-color 0.15s ease, background 0.15s ease, box-shadow 0.12s ease;
 }
 
+/* Hover bewusst dezent: Ein Knopf unter dem ruhenden Mauszeiger darf nicht wie eine Vorauswahl aussehen. */
 .invest-btn:hover:not(:disabled) {
+  border-color: var(--color-blue);
+}
+
+.invest-btn--selected,
+.invest-btn--selected:hover:not(:disabled) {
   transform: translate(-2px, -2px);
   border-color: var(--color-coral);
-  background: rgba(242, 118, 94, 0.12);
+  background: rgba(242, 118, 94, 0.16);
   box-shadow: 4px 4px 0px var(--color-espresso);
+}
+
+.invest-btn--selected .invest-btn__amount {
+  color: var(--color-espresso);
+}
+
+.confirm-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  margin-top: 1rem;
+}
+
+.confirm-row__hint {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  flex: 1 1 260px;
+}
+
+.confirm-row__button {
+  flex: 0 0 auto;
+}
+
+.contract-rules {
+  margin: 0 0 1.1rem;
+  padding-left: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.leave-confirm {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.leave-confirm__text {
+  font-size: 0.85rem;
+  font-weight: 600;
+  flex: 1 1 240px;
+}
+
+.admin-player-box__tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.45rem;
+}
+
+.admin-mini-btn {
+  font-size: 0.74rem;
+  font-weight: 700;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.admin-mini-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.admin-mini-btn--active {
+  background: var(--color-blue);
+  color: #fff;
+}
+
+.admin-player-box__warn {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--color-coral);
 }
 
 .invest-btn:disabled {
@@ -782,9 +871,6 @@ body {
   color: var(--color-blue);
 }
 
-.invest-btn:hover:not(:disabled) .invest-btn__amount {
-  color: var(--color-espresso);
-}
 
 .invest-btn__desc {
   font-size: 0.85rem;

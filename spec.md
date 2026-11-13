@@ -10,32 +10,35 @@ Die Plattform ermöglicht es Spielern in Gruppen über mehrere Runden hinweg Ent
 
 ### 2.1 Grundparameter & Konfiguration
 Alle Spielparameter werden zentral in [`application.yml`](backend/src/main/resources/application.yml) (bzw. über Umgebungsvariablen) konfiguriert:
-* **Startkapital (`StartAmount`):** Standardmässig `4 Fr.` (intern als `400` Rappen gespeichert, um Fliesskommafehler zu vermeiden).
+* **Startkapital (`StartAmount`):** Standardmässig `6 Fr.` (intern als `600` Rappen gespeichert, um Fliesskommafehler zu vermeiden).
 * **Gruppengrösse (`GroupSize`):** Standardmässig `6` Spieler pro Session.
 * **Rundenanzahl (`TotalRounds`):** Standardmässig `10` Runden.
 * **Klimaziel (`TargetAmount`):** Automatisch berechnet als $50\%$ des gesamten Gruppen-Startkapitals:
   $$\text{TargetAmount} = \text{GroupSize} \times \text{StartAmount} \times 0.5$$
-  *(Bei 6 Spielern à 4 Fr. beträgt das Gesamtkapital 24 Fr. und das Klimaziel **12 Fr.**)*
+  *(Bei 6 Spielern à 6 Fr. beträgt das Gesamtkapital 36 Fr. und das Klimaziel **18 Fr.**)*
 * **Verlustrisiko (`RiskLevel`):** Standardmässig $90\%$ (`0.90`). Wird das Klimaziel nach der letzten Runde verfehlt, verlieren alle Spieler mit einer Wahrscheinlichkeit von $90\%$ ihr gesamtes verbliebenes Restguthaben.
-* **Währungsanzeige im UI:** Sämtliche Beträge werden im gesamten Frontend ausschliesslich in **Franken (`Fr.`)** dargestellt (z. B. `0 Fr.`, `0.2 Fr.`, `0.4 Fr.`, `4 Fr.`, `12 Fr.`).
+* **Währungsanzeige im UI:** Sämtliche Beträge werden im gesamten Frontend ausschliesslich in **Franken (`Fr.`)** dargestellt (z. B. `0 Fr.`, `0.3 Fr.`, `0.6 Fr.`, `6 Fr.`, `18 Fr.`).
 
 ### 2.2 Anonymität, Lobby & Inaktivitäts-Schutz
-* **Pseudonyme:** Beim Betreten einer Session erhält jeder Spieler automatisch ein zufälliges, neutrales Klima-/Wetter-Pseudonym (z. B. *Monsun*, *Passat*, *Taifun*, *Golfstrom*, *Jetstream*, *Polarwirbel*). Klarnamen werden im Spiel nicht angezeigt.
+* **Spielernummern:** Beim Betreten einer Session erhält jeder Spieler automatisch eine Spielernummer (`Spieler 1` bis `Spieler 6`). Klarnamen werden im Spiel nicht erfasst oder angezeigt.
 * **Aktives Verlassen:** Verlässt ein Spieler den Warteraum über den Button `"Raum verlassen"` (`POST /api/lobby/leave`), wird sein Spieler-Datensatz sofort aus der Datenbank gelöscht und der Platz in der Lobby wieder freigegeben.
-* **Automatischer Inaktivitäts-Kick (30s):** Spieler in der `LOBBY`, die länger als **30 Sekunden** kein Lebenszeichen (Polling) senden (z. B. durch Schliessen des Browser-Tabs), werden automatisch aus der Session entfernt, damit keine Plätze durch inaktive Verbindungen blockiert bleiben.
+* **Kein automatischer Inaktivitäts-Kick:** Spieler bleiben im Warteraum, auch wenn ihr Gerät gesperrt ist oder der Tab im Hintergrund liegt (z. B. während die Regeln erklärt werden). Blockiert ein geschlossener Tab einen Platz, entfernt die Spielleitung den Spieler im Admin-Dashboard (`DELETE /api/admin/sessions/{id}/players/{nr}`, nur in der `LOBBY`).
+* **Wiedereinstieg mit neuem Gerät:** Fällt im laufenden Spiel ein Gerät aus, gibt die Spielleitung den Platz frei (`POST /api/admin/sessions/{id}/players/{nr}/rejoin`). Das nächste Gerät, das den Raumcode eingibt, übernimmt diesen Spieler mit unverändertem Spielstand; das alte Gerät wird abgemeldet. Ohne Freigabe kann einem laufenden Spiel niemand beitreten.
+* **Session abbrechen:** Nicht abgeschlossene Sessions können im Admin-Dashboard gelöscht werden (`DELETE /api/admin/sessions/{id}`); die Geräte kehren zur Code-Eingabe zurück. Abgeschlossene Sessions sind geschützt. Ein einzelnes hängendes Gerät wird über `/?reset` zurückgesetzt.
 * **Session-Persistenz:** Über den `sessionToken` im `localStorage` können aktive Spieler bei einem Seiten-Reload nahtlos in ihre laufende Sitzung zurückkehren.
 
 ### 2.3 Rundenablauf & Manuelle Steuerung (Variante 1 & 2)
 * **Kein Rundentimer / Kein Auto-Bet:** Es gibt keinen Countdown und keine automatische Zwangswahl. Alle Spieler treffen ihre Entscheidung in ihrem eigenen Tempo.
 * **Beitragsoptionen pro Runde:** Jeder Spieler wählt in der Investitionsphase (`INVESTMENT`) eine von drei diskreten Optionen bezogen auf das Startkapital:
   * **0%** (`0 Fr.`)
-  * **5%** (`0.2 Fr.` – der faire Durchschnittsbeitrag)
-  * **10%** (`0.4 Fr.`)
+  * **5%** (`0.3 Fr.` – der faire Durchschnittsbeitrag)
+  * **10%** (`0.6 Fr.`)
+* **Auswählen und bestätigen:** Der Spieler wählt eine Option und bestätigt sie anschliessend ausdrücklich. Zu Beginn jeder Runde ist nichts vorausgewählt; nach dem Bestätigen ist der Beitrag endgültig. Dasselbe gilt für Beitritt und Austritt beim Abkommen.
 * **Manuelle Rundenfreigabe durch den Admin:** Sobald alle Spieler der Session ihre Entscheidung für die aktuelle Runde eingereicht haben (`allPlayersReadyForNextRound`), schaltet der Experimentator im Admin-Dashboard manuell in die nächste Runde weiter (`POST /api/admin/sessions/{id}/next-round`) bzw. schliesst nach Runde 10 das Experiment ab.
 
 ### 2.4 Informations-Sichtbarkeit & Lokaler Notizblock
 * **Kein Gesamttopf während des Spiels:** Während das Spiel läuft (`RUNNING`), wird den Spielern die kumulierte Gesamtsumme im Klimakonto **nicht** angezeigt.
-* **Nur letzte abgeschlossene Runde sichtbar:** Ab Runde 2 sehen die Spieler in der Rückblick-Tabelle ausschliesslich die Einzelbeiträge jedes Gruppenmitglieds sowie die Rundensumme der **unmittelbar vorangegangenen Runde** (nicht die gesamte Historie aller früheren Runden).
+* **Immer nur eine Runde sichtbar:** Sobald **alle** Spieler in der laufenden Runde entschieden haben, sehen sie die Einzelbeiträge jedes Gruppenmitglieds sowie die Rundensumme dieser Runde (auch in der letzten Runde, bevor die Spielleitung das Spiel abschliesst). Solange noch jemand überlegt, ist nur die vorangegangene Runde sichtbar. Die gesamte Historie aller früheren Runden wird nicht angezeigt.
 * **Lokaler Notizblock:** Um den Überblick über die eigenen Berechnungen und bisherige Zahlungen zu behalten, steht jedem Spieler auf der rechten Seite ein privater Notizblock zur Verfügung, der ausschliesslich lokal im Browser (`localStorage`) gespeichert wird.
 
 ---
@@ -49,18 +52,20 @@ Beim Erstellen einer Session im Admin-Dashboard kann zwischen **Variante 1: Norm
   1. **«Ja» (`YES`):** Unbedingter Beitritt – der Spieler wird unabhängig von der Wahl der anderen immer Mitglied.
   2. **«Nur wenn min. die Hälfte dabei» (`CONDITIONAL`):** Bedingter Beitritt – der Spieler wird nur dann Mitglied, wenn insgesamt mindestens die Hälfte der Gruppe ($\ge 3$ von 6 Spielern mit `YES` oder `CONDITIONAL`) bereit ist beizutreten. Sind es weniger als 3 potenzielle Mitglieder, bleibt er Nichtmitglied.
   3. **«Nein» (`NO`):** Kein Beitritt – der Spieler spielt als Nichtmitglied.
+* Die Bedingung gilt **nur für den Beitritt am Anfang**: Wer einmal Mitglied ist, bleibt es, auch wenn später andere austreten.
+* Solange nicht alle entschieden haben, sind die Entscheide der anderen weder für Spieler noch im Admin-Dashboard sichtbar.
 * Ein späterer Beitritt in darauffolgenden Runden ist **nicht** möglich.
 * Für alle Spieler ist jederzeit transparent ersichtlich, welche Gruppenmitglieder im Abkommen sind (`📜 Im Abkommen`) und wer ausgetreten ist (`Ausgetreten`).
 
 ### 3.2 Technisch erzwungener Mindestbeitrag (`INVESTMENT`)
-* **Nichtmitglieder:** Wählen pro Runde frei zwischen **0%** (`0 Fr.`), **5%** (z. B. `0.20 Fr.` / `0.25 Fr.`) und **10%** (z. B. `0.40 Fr.` / `0.50 Fr.`).
+* **Nichtmitglieder:** Wählen pro Runde frei zwischen **0%** (`0 Fr.`), **5%** (`0.3 Fr.`) und **10%** (`0.6 Fr.`).
 * **Mitglieder:** Das Klimaabkommen verpflichtet jedes aktive Mitglied, pro Runde **mindestens 5%** des Startkapitals in das Klimakonto einzuzahlen. Die Option `0 Fr.` ist für aktive Abkommensmitglieder sowohl im Frontend gesperrt als auch im Backend technisch blockiert; wählbar sind somit nur die 5%- oder 10%-Option.
 
-### 3.3 Optionaler Austritt ab Runde 2 (`POST /api/game/contract/leave`)
-* In **Runde 1** ist ein Austritt noch nicht möglich, sodass jedes Mitglied mindestens in der ersten Runde seinen Pflichtbeitrag leistet.
-* **Ab Runde 2** (nach der ersten Runde) können aktive Mitglieder das Abkommen jederzeit kostenlos verlassen – sowohl **vor** als auch **nach** dem Investieren in der jeweiligen Runde.
-* Im Frontend ist diese Aktion bewusst dezent als untergeordnete Option (*«Aus dem Abkommen austreten»*) unterhalb der Beitragsauswahl platziert.
-* Nach einem Austritt wechselt der Spieler dauerhaft in den Status **Nichtmitglied** (`inContract = false`, `leftContract = true`) und kann (sofern er in der aktuellen Runde noch nicht eingezahlt hat) ab sofort wieder `0 Fr.` wählen.
+### 3.3 Optionaler Austritt (`POST /api/game/contract/leave`)
+* Aktive Mitglieder können den Austritt **ab Runde 1** anmelden – sowohl **vor** als auch **nach** dem Einzahlen in der jeweiligen Runde.
+* Der Austritt gilt **ab der nächsten Runde**: In der Runde, in der er angemeldet wird, bleibt der Spieler Mitglied und muss den Mindestbeitrag leisten. In der letzten Runde ist kein Austritt mehr möglich.
+* Der Austritt muss im Frontend ausdrücklich bestätigt werden und kann nicht zurückgenommen werden.
+* Nach einem Austritt ist der Spieler dauerhaft **Nichtmitglied** (`inContract = false`, `leftContract = true`), für alle als `Ausgetreten` sichtbar, und kann wieder `0 Fr.` wählen.
 
 ---
 
@@ -79,8 +84,8 @@ Sobald das Spiel den Status `FINISHED` erreicht, wird jedem Spieler **vor** der 
 2. **Reaktion auf Ungleichheit (Single-Choice):** Verhalten, wenn andere weniger beigetragen haben (Trotzdem viel gezahlt / Beitrag reduziert / Geärgert, aber gleich weitergemacht / Nicht darauf geachtet).
 3. **Motivations-Ranking (Drag & Drop):** Sortierung von 4 Faktoren nach Wichtigkeit (Eigener Gewinn, Schutz vor Klimaverlust, Fairness innerhalb der Gruppe, Verhalten der anderen Spieler).
 4. **Zusatzfragen zum Klimaabkommen (nur in Variante 2 `WITH_CONTRACTS`, abhängig vom tatsächlichen Verhalten des Spielers):**
-   * *Was war der wichtigste Grund, warum du dem Abkommen beigetreten bist?* (falls beigetreten)
-   * *Was war der wichtigste Grund, warum du dem Abkommen nicht beigetreten bist?* (falls nicht beigetreten)
+   * *Was war der wichtigste Grund für deinen Beitritt zum Abkommen?* (3a – nur wer tatsächlich Mitglied wurde)
+   * *Was war der wichtigste Grund, warum du nicht beigetreten bist?* (3b – alle anderen, auch wer «Ab 3 Spielern» wählte und mangels Mehrheit nie Mitglied wurde)
    * *Was war der wichtigste Grund für deinen Austritt aus dem Abkommen?* (falls ausgetreten)
    * *Was war der wichtigste Grund, warum du im Abkommen geblieben bist?* (falls bis zum Schluss geblieben)
 5. **Demografie & Auszahlung:**

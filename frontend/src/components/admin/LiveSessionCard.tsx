@@ -8,6 +8,18 @@ interface LiveSessionCardProps {
   adminKey: string;
   onStart: (sessionId: string) => Promise<void>;
   onAdvanceRound: (sessionId: string) => Promise<void>;
+  onRemovePlayer: (sessionId: string, playerNumber: number) => Promise<void>;
+  onSetRejoinAllowed: (sessionId: string, playerNumber: number, allowed: boolean) => Promise<void>;
+  onDeleteSession: (sessionId: string) => Promise<void>;
+}
+
+// Während des Spiels meldet sich jedes Gerät etwa jede Sekunde. Bleibt das länger aus, ist das Gerät
+// vermutlich offline, gesperrt oder der Tab geschlossen.
+const OFFLINE_WARNING_SECONDS = 15;
+
+function formatDuration(totalSeconds: number): string {
+  if (totalSeconds < 60) return `${totalSeconds} s`;
+  return `${Math.floor(totalSeconds / 60)} min`;
 }
 
 const PHASE_LABELS: Record<string, string> = {
@@ -22,6 +34,9 @@ export const LiveSessionCard: React.FC<LiveSessionCardProps> = ({
   adminKey,
   onStart,
   onAdvanceRound,
+  onRemovePlayer,
+  onSetRejoinAllowed,
+  onDeleteSession,
 }) => {
   const [busy, setBusy] = useState<boolean>(false);
 
@@ -120,7 +135,7 @@ export const LiveSessionCard: React.FC<LiveSessionCardProps> = ({
               title={
                 session.canAdvanceRound
                   ? isLastRound
-                    ? 'Runde 10 abschliessen und Experiment beenden'
+                    ? 'Letzte Runde abschliessen und Experiment beenden'
                     : `Runde ${session.currentRound + 1} starten`
                   : session.roundPhase !== 'INVESTMENT'
                   ? `Spieler befinden sich noch in der Abkommen-Phase (${PHASE_LABELS[session.roundPhase]})`
@@ -140,6 +155,27 @@ export const LiveSessionCard: React.FC<LiveSessionCardProps> = ({
             sessionCode={session.code}
             adminKey={adminKey}
           />
+
+          {session.status !== 'FINISHED' && (
+            <button
+              type="button"
+              className="btn btn--ghost"
+              style={{ padding: '0.45rem 0.75rem', fontSize: '0.82rem' }}
+              disabled={busy}
+              title="Bricht diese Session ab und löscht sie. Die Geräte der Spieler kehren zur Code-Eingabe zurück."
+              onClick={() => {
+                const question =
+                  session.status === 'RUNNING'
+                    ? `Laufendes Spiel ${session.code} wirklich abbrechen und löschen? Alle bisherigen Entscheide dieser Session gehen verloren.`
+                    : `Raum ${session.code} wirklich löschen?`;
+                if (window.confirm(question)) {
+                  runAction(() => onDeleteSession(session.id));
+                }
+              }}
+            >
+              ✕ Session abbrechen
+            </button>
+          )}
         </div>
       </div>
 
@@ -209,6 +245,49 @@ export const LiveSessionCard: React.FC<LiveSessionCardProps> = ({
                 <span className="admin-player-box__payout">
                   Auszahlung: <strong>{formatFr(p.finalPayoutRappen ?? 0)}</strong>
                 </span>
+              </div>
+            )}
+
+            {p.isConnected &&
+              session.status !== 'FINISHED' &&
+              (p.secondsSinceLastSeen ?? 0) >= OFFLINE_WARNING_SECONDS && (
+                <span className="admin-player-box__warn">
+                  ⚠ Keine Verbindung seit {formatDuration(p.secondsSinceLastSeen ?? 0)}
+                </span>
+              )}
+
+            {p.isConnected && p.rejoinAllowed && (
+              <span className="admin-player-box__warn">
+                Neues Gerät zugelassen: Raumcode {session.code} auf dem neuen Gerät eingeben.
+              </span>
+            )}
+
+            {p.isConnected && (
+              <div className="admin-player-box__tools">
+                {session.status === 'LOBBY' && (
+                  <button
+                    type="button"
+                    className="admin-mini-btn"
+                    disabled={busy}
+                    title="Entfernt diesen Spieler aus dem Warteraum (z. B. wenn der Tab geschlossen wurde)."
+                    onClick={() => runAction(() => onRemovePlayer(session.id, p.playerNumber))}
+                  >
+                    Entfernen
+                  </button>
+                )}
+                {session.status !== 'LOBBY' && (
+                  <button
+                    type="button"
+                    className={`admin-mini-btn ${p.rejoinAllowed ? 'admin-mini-btn--active' : ''}`}
+                    disabled={busy}
+                    title="Für Spieler, deren Gerät oder Browser ausgefallen ist: Das nächste Gerät, das den Raumcode eingibt, übernimmt diesen Spieler mit unverändertem Spielstand."
+                    onClick={() =>
+                      runAction(() => onSetRejoinAllowed(session.id, p.playerNumber, !p.rejoinAllowed))
+                    }
+                  >
+                    {p.rejoinAllowed ? 'Freigabe zurücknehmen' : 'Neues Gerät zulassen'}
+                  </button>
+                )}
               </div>
             )}
           </div>
