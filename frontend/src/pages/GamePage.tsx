@@ -61,17 +61,6 @@ export const GamePage: React.FC<GamePageProps> = ({
             />
           ) : (
             <>
-              <PlayerStatusList
-                playersStatus={gameState.playersStatus}
-                myPlayerNumber={gameState.player.playerNumber}
-                gameMode={gameState.gameMode}
-                inContract={gameState.player.inContract}
-                canLeaveContract={gameState.contractState?.canLeaveContractNow ?? false}
-                currentRound={gameState.currentRound}
-                totalRounds={gameState.totalRounds}
-                onLeaveContract={handleLeaveContract}
-              />
-
               <InvestmentButtons
                 key={gameState.currentRound}
                 isLastRound={gameState.currentRound >= gameState.totalRounds}
@@ -97,7 +86,21 @@ export const GamePage: React.FC<GamePageProps> = ({
           )}
         </div>
 
+        {/* Die Abkommens-Übersicht steht in der Seitenspalte, damit die Hauptspalte (Beitrag und Rückmeldung)
+            in beiden Bedingungen identisch aufgebaut ist und die Rückmeldung ohne Scrollen sichtbar bleibt. */}
         <div className="game-main-grid__right">
+          {gameState.roundPhase === 'INVESTMENT' && (
+            <PlayerStatusList
+              playersStatus={gameState.playersStatus}
+              myPlayerNumber={gameState.player.playerNumber}
+              gameMode={gameState.gameMode}
+              inContract={gameState.player.inContract}
+              canLeaveContract={gameState.contractState?.canLeaveContractNow ?? false}
+              currentRound={gameState.currentRound}
+              totalRounds={gameState.totalRounds}
+              onLeaveContract={handleLeaveContract}
+            />
+          )}
           <LocalNotepad notes={notes} onChange={setNotes} />
         </div>
       </div>

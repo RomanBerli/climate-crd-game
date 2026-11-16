@@ -67,8 +67,8 @@ export const PlayerStatusList: React.FC<PlayerStatusListProps> = ({
             style={{ padding: '0.4rem 0.85rem', fontSize: '0.85rem' }}
           >
             {canLeaveContract
-              ? 'Abkommen ab der nächsten Runde verlassen'
-              : 'Austritt für nächste Runde vorgemerkt'}
+              ? 'Austreten ab nächster Runde'
+              : 'Austritt vorgemerkt'}
           </button>
         )}
 

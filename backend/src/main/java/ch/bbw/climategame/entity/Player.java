@@ -12,10 +12,18 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
+import org.hibernate.annotations.DynamicUpdate;
+
 import java.time.Instant;
 import java.util.UUID;
 
+/**
+ * {@code @DynamicUpdate}: Es werden immer nur die tatsächlich geänderten Spalten geschrieben. So kann ein
+ * Schreibvorgang niemals Felder, die er gar nicht anfasst (Guthaben, Auszahlung, Abkommensstatus), mit einem
+ * veralteten Wert überschreiben.
+ */
 @Entity
+@DynamicUpdate
 @Table(
         name = "player",
         uniqueConstraints = {

@@ -22,6 +22,12 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -228,6 +234,95 @@ class ClimateGameIntegrationTest {
             assertThat(complete.totalPotRappen()).isEqualTo(0);
 
             adminService.advanceRound(session.id());
+        }
+    }
+
+    /**
+     * Regression: Die Browser fragen den Spielstand jede Sekunde ab. Diese Abfragen dürfen niemals
+     * gleichzeitig gespeicherte Spielerdaten (Guthaben, Auszahlung, Abkommensstatus, Beitrittsentscheid)
+     * mit veralteten Werten überschreiben.
+     */
+    @Test
+    void concurrentStatePollingNeverOverwritesBalancesPayoutsOrContractState() throws Exception {
+        AdminSessionResponse session = adminService.createSession(GameMode.WITH_CONTRACTS);
+        List<JoinLobbyResponse> players = new ArrayList<>();
+        for (int i = 1; i <= 6; i++) {
+            players.add(gameEngineService.joinLobby(session.code(), null));
+        }
+        adminService.startSession(session.id());
+
+        AtomicBoolean polling = new AtomicBoolean(true);
+        AtomicInteger pollCount = new AtomicInteger();
+        ExecutorService pollers = Executors.newFixedThreadPool(12);
+        List<Future<?>> pollerFutures = new ArrayList<>();
+        for (int t = 0; t < 12; t++) {
+            String token = players.get(t % 6).sessionToken();
+            pollerFutures.add(pollers.submit(() -> {
+                while (polling.get()) {
+                    gameEngineService.getPlayerGameState(token);
+                    pollCount.incrementAndGet();
+                }
+            }));
+        }
+
+        try {
+            // 1x YES + 3x CONDITIONAL (fulfilled) + 2x NO: conditional players become members with the last decision
+            String[] choices = {"YES", "CONDITIONAL", "CONDITIONAL", "CONDITIONAL", "NO", "NO"};
+            for (int i = 0; i < 6; i++) {
+                gameEngineService.submitContractJoin(players.get(i).sessionToken(), choices[i]);
+            }
+
+            int[] invested = new int[6];
+            boolean[] member = {true, true, true, true, false, false};
+            for (int round = 1; round <= 10; round++) {
+                if (round == 3) {
+                    gameEngineService.leaveContract(players.get(1).sessionToken());
+                }
+                for (int i = 0; i < 6; i++) {
+                    int amount = member[i] ? (round % 2 == 0 ? 40 : 20) : (i == 4 ? 0 : 20);
+                    gameEngineService.submitInvestment(players.get(i).sessionToken(), amount);
+                    invested[i] += amount;
+                }
+                adminService.advanceRound(session.id());
+                if (round == 3) {
+                    member[1] = false;
+                }
+                if (round < 10) {
+                    AdminSessionResponse mid = adminService.getSession(session.id());
+                    for (int i = 0; i < 6; i++) {
+                        assertThat(mid.players().get(i).inContract())
+                                .as("round %d: contract membership of player %d", round + 1, i + 1)
+                                .isEqualTo(member[i]);
+                    }
+                }
+            }
+
+            polling.set(false);
+            for (Future<?> f : pollerFutures) {
+                f.get(20, TimeUnit.SECONDS);
+            }
+            assertThat(pollCount.get()).isGreaterThan(100);
+
+            AdminSessionResponse finished = adminService.getSession(session.id());
+            assertThat(finished.status()).isEqualTo(SessionStatus.FINISHED);
+            boolean lost = Boolean.TRUE.equals(finished.riskOccurred());
+            for (int i = 0; i < 6; i++) {
+                Player entity = playerRepository.findBySessionToken(players.get(i).sessionToken()).orElseThrow();
+                assertThat(entity.getCurrentBalanceRappen())
+                        .as("balance of player %d", i + 1)
+                        .isEqualTo(400 - invested[i]);
+                assertThat(entity.getFinalPayoutRappen())
+                        .as("final payout of player %d", i + 1)
+                        .isEqualTo(lost ? 0 : 400 - invested[i]);
+                assertThat(entity.isContractJoinDecided()).isTrue();
+                assertThat(entity.getContractJoinChoice()).isEqualTo(choices[i]);
+                assertThat(entity.isEverJoinedContract()).as("ever joined, player %d", i + 1).isEqualTo(i < 4);
+                assertThat(entity.isInContract()).as("in contract at end, player %d", i + 1).isEqualTo(member[i]);
+                assertThat(entity.isLeftContract()).as("left contract, player %d", i + 1).isEqualTo(i == 1);
+            }
+        } finally {
+            polling.set(false);
+            pollers.shutdownNow();
         }
     }
 

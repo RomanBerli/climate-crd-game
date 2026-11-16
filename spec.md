@@ -113,11 +113,13 @@ Das UI folgt einem klaren, kantigen ("boxy", minimale Rundungen von `2px`–`4px
 
 ### 5.2 Aufbau der Spieler-Ansicht (`GamePage`)
 * **Header:** Raumname, eigenes Pseudonym, aktuelle Runde (`X / 10`), Klimaziel (`12 Fr.`) und persönliches Restguthaben in `Fr.`.
-* **Linke Hauptspalte (von oben nach unten):**
-  1. **Aktuelle Aktions-Card (leicht roter Hintergrund `#FCE8E4`):** Je nach Phase entweder Beitrittsentscheidung zum Klimaabkommen (`CONTRACT_JOIN` vor Runde 1) oder Beitrag für das Klimakonto (`INVESTMENT`, inkl. dezentem Austritts-Link ab Runde 2 für aktive Mitglieder). Eine kompakte Hinweisbox zeigt den aktuellen eigenen Abkommensstatus sowie kurzzeitige Abkommens-Meldungen.
-  2. **Rückblick letzte Runde (`HistoryTable`):** Zeigt ab Runde 2 die Einzelbeiträge und die Rundensumme der jeweils letzten abgeschlossenen Runde.
-  3. **Status der Gruppe (`PlayerStatusList`):** Unterste Card mit den 6 anonymisierten Spielern, ihrem Abkommens-Badge (`📜 Im Abkommen` / `Ausgetreten`) und ihrem aktuellen Entscheidungsstatus (`Entschieden` / `Überlegt...`).
-* **Rechte Seitenspalte:** Privater, lokal gespeicherter **Notizblock** (`LocalNotepad`) für eigene Berechnungen.
+* **Linke Hauptspalte (von oben nach unten, in beiden Varianten identisch aufgebaut):**
+  1. **Aktuelle Aktions-Card (leicht roter Hintergrund `#FCE8E4`):** Je nach Phase entweder Beitrittsentscheidung zum Klimaabkommen (`CONTRACT_JOIN` vor Runde 1, mit Kurzregeln) oder Beitrag für das Klimakonto (`INVESTMENT`). Jede Entscheidung wird ausgewählt und dann bestätigt.
+  2. **Beiträge der Runde (`HistoryTable`):** Zeigt die Einzelbeiträge und die Rundensumme der laufenden Runde, sobald alle entschieden haben, sonst jene der letzten abgeschlossenen Runde.
+* **Rechte Seitenspalte:**
+  1. **Abkommen (`PlayerStatusList`, nur Variante 2):** Die 6 Spieler mit ihrem Abkommensstatus (`Im Abkommen` / `Ausgetreten` / `Nicht dabei`) sowie der Austritts-Knopf für Mitglieder.
+  2. Privater, lokal gespeicherter **Notizblock** (`LocalNotepad`) für eigene Berechnungen.
+* **Ohne Scrollen sichtbar:** Beitragsknöpfe, Bestätigen-Knopf und die Beiträge der Runde passen in beiden Varianten in ein Laptop-Fenster ab ca. 1280×600 Pixel.
 
 ### 5.3 Admin-Dashboard & CSV-Export (`AdminPage`)
 * **Passwortschutz:** Zugriff über das in `application.yml` definierte Admin-Passwort (`app.admin-secret`).

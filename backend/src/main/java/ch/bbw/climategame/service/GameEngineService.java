@@ -210,14 +210,35 @@ public class GameEngineService {
                         "Spieler-Sitzung nicht gefunden oder abgelaufen."
                 ));
 
-        player.setLastSeenAt(Instant.now());
-        playerRepository.save(player);
+        // Reine Leseabfrage: Nur der «zuletzt gesehen»-Zeitpunkt wird gezielt aktualisiert,
+        // die Spielerzeile selbst wird hier nie zurückgeschrieben.
+        playerRepository.touchLastSeen(player.getId(), Instant.now());
 
         GameSession session = player.getSession();
         List<Player> allPlayers = playerRepository.findBySessionIdOrderByPlayerNumberAsc(session.getId());
         List<RoundInvestment> allInvestments = investmentRepository.findBySessionIdOrderByRoundNumberAscPlayerNumberAsc(session.getId());
 
         return buildGameStateResponse(session, player, allPlayers, allInvestments);
+    }
+
+    private record LockedPlayerContext(GameSession session, Player player) {
+    }
+
+    /**
+     * Sperrt zuerst die Session und lädt den Spieler erst danach. Alle Änderungen an Spielern einer Session
+     * laufen dadurch strikt nacheinander ab und arbeiten immer mit dem aktuell gespeicherten Stand.
+     */
+    private LockedPlayerContext lockSessionAndLoadPlayer(String sessionToken) {
+        if (sessionToken == null || sessionToken.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Kein gültiges Spieler-Token vorhanden.");
+        }
+        UUID sessionId = playerRepository.findSessionIdBySessionToken(sessionToken)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Spieler-Sitzung ungültig."));
+        GameSession session = sessionRepository.findByIdForUpdate(sessionId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session nicht gefunden."));
+        Player player = playerRepository.findBySessionToken(sessionToken)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Spieler-Sitzung ungültig."));
+        return new LockedPlayerContext(session, player);
     }
 
     @Transactional
@@ -236,11 +257,9 @@ public class GameEngineService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ungültige Beitritts-Option: " + rawChoice);
         }
 
-        Player tokenPlayer = playerRepository.findBySessionToken(sessionToken)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Spieler-Sitzung ungültig."));
-
-        GameSession session = sessionRepository.findByIdForUpdate(tokenPlayer.getSession().getId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session nicht gefunden."));
+        LockedPlayerContext locked = lockSessionAndLoadPlayer(sessionToken);
+        GameSession session = locked.session();
+        Player tokenPlayer = locked.player();
 
         if (session.getStatus() != SessionStatus.RUNNING || session.getRoundPhase() != RoundPhase.CONTRACT_JOIN) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Die Beitrittsphase zum Abkommen ist nicht aktiv.");
@@ -315,15 +334,9 @@ public class GameEngineService {
 
     @Transactional
     public GameStateResponse leaveContract(String sessionToken) {
-        if (sessionToken == null || sessionToken.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Kein gültiges Spieler-Token vorhanden.");
-        }
-
-        Player tokenPlayer = playerRepository.findBySessionToken(sessionToken)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Spieler-Sitzung ungültig."));
-
-        GameSession session = sessionRepository.findByIdForUpdate(tokenPlayer.getSession().getId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session nicht gefunden."));
+        LockedPlayerContext locked = lockSessionAndLoadPlayer(sessionToken);
+        GameSession session = locked.session();
+        Player tokenPlayer = locked.player();
 
         if (session.getStatus() != SessionStatus.RUNNING || session.getRoundPhase() != RoundPhase.INVESTMENT) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Ein Austritt ist nur während einer laufenden Spielrunde möglich.");
@@ -365,15 +378,9 @@ public class GameEngineService {
 
     @Transactional
     public GameStateResponse submitInvestment(String sessionToken, int amountRappen) {
-        if (sessionToken == null || sessionToken.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Kein gültiges Spieler-Token vorhanden.");
-        }
-
-        Player tokenPlayer = playerRepository.findBySessionToken(sessionToken)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Spieler-Sitzung ungültig."));
-
-        GameSession session = sessionRepository.findByIdForUpdate(tokenPlayer.getSession().getId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session nicht gefunden."));
+        LockedPlayerContext locked = lockSessionAndLoadPlayer(sessionToken);
+        GameSession session = locked.session();
+        Player tokenPlayer = locked.player();
 
         if (session.getStatus() != SessionStatus.RUNNING || session.getRoundPhase() != RoundPhase.INVESTMENT) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Investitionen sind erst möglich, sobald die Einzahlungsphase der Runde aktiv ist.");
@@ -422,15 +429,9 @@ public class GameEngineService {
 
     @Transactional
     public GameStateResponse submitSurvey(String sessionToken, SubmitSurveyRequest request) {
-        if (sessionToken == null || sessionToken.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Kein gültiges Spieler-Token vorhanden.");
-        }
-
-        Player tokenPlayer = playerRepository.findBySessionToken(sessionToken)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Spieler-Sitzung ungültig."));
-
-        GameSession session = sessionRepository.findByIdForUpdate(tokenPlayer.getSession().getId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session nicht gefunden."));
+        LockedPlayerContext locked = lockSessionAndLoadPlayer(sessionToken);
+        GameSession session = locked.session();
+        Player tokenPlayer = locked.player();
 
         if (session.getStatus() != SessionStatus.FINISHED) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Der Fragebogen kann erst nach Abschluss aller Runden ausgefüllt werden.");
