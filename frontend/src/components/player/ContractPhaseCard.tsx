@@ -79,7 +79,7 @@ export const ContractPhaseCard: React.FC<ContractPhaseCardProps> = ({
         <>
           <ul className="contract-rules">
             <li>
-              Wer im Abkommen ist, zahlt in jeder Runde mindestens <strong>{minContribution}</strong> ein. «0 Fr.» ist für Mitglieder gesperrt.
+              Wer im Abkommen ist, verpflichtet sich, in jeder Runde mindestens den fairen Beitrag von <strong>{minContribution}</strong> einzuzahlen. «0 Fr.» ist für Mitglieder gesperrt.
             </li>
             <li>
               Der Beitritt ist nur jetzt möglich. Ein Austritt ist während des Spiels möglich und gilt ab der jeweils nächsten Runde.
