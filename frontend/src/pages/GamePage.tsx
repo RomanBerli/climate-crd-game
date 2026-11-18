@@ -61,18 +61,9 @@ export const GamePage: React.FC<GamePageProps> = ({
             />
           ) : (
             <>
-              <PlayerStatusList
-                playersStatus={gameState.playersStatus}
-                myPlayerNumber={gameState.player.playerNumber}
-                gameMode={gameState.gameMode}
-                inContract={gameState.player.inContract}
-                canLeaveContract={gameState.contractState?.canLeaveContractNow ?? false}
-                currentRound={gameState.currentRound}
-                totalRounds={gameState.totalRounds}
-                onLeaveContract={handleLeaveContract}
-              />
-
               <InvestmentButtons
+                key={gameState.currentRound}
+                isLastRound={gameState.currentRound >= gameState.totalRounds}
                 initialBalanceRappen={gameState.player.initialBalanceRappen}
                 currentBalanceRappen={gameState.player.currentBalanceRappen}
                 allowedOptions={gameState.player.allowedInvestmentOptions}
@@ -84,15 +75,32 @@ export const GamePage: React.FC<GamePageProps> = ({
             </>
           )}
 
-          <HistoryTable
-            history={gameState.history}
-            myPlayerNumber={gameState.player.playerNumber}
-            groupSize={gameState.groupSize}
-            initialBalanceRappen={gameState.player.initialBalanceRappen}
-          />
+          {gameState.roundPhase === 'INVESTMENT' && (
+            <HistoryTable
+              history={gameState.history}
+              myPlayerNumber={gameState.player.playerNumber}
+              groupSize={gameState.groupSize}
+              initialBalanceRappen={gameState.player.initialBalanceRappen}
+              currentRound={gameState.currentRound}
+            />
+          )}
         </div>
 
+        {/* Die Abkommens-Übersicht steht in der Seitenspalte, damit die Hauptspalte (Beitrag und Rückmeldung)
+            in beiden Bedingungen identisch aufgebaut ist und die Rückmeldung ohne Scrollen sichtbar bleibt. */}
         <div className="game-main-grid__right">
+          {gameState.roundPhase === 'INVESTMENT' && (
+            <PlayerStatusList
+              playersStatus={gameState.playersStatus}
+              myPlayerNumber={gameState.player.playerNumber}
+              gameMode={gameState.gameMode}
+              inContract={gameState.player.inContract}
+              canLeaveContract={gameState.contractState?.canLeaveContractNow ?? false}
+              currentRound={gameState.currentRound}
+              totalRounds={gameState.totalRounds}
+              onLeaveContract={handleLeaveContract}
+            />
+          )}
           <LocalNotepad notes={notes} onChange={setNotes} />
         </div>
       </div>

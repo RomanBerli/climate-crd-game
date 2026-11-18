@@ -66,17 +66,29 @@ export async function apiRequest<T>(
     headers['X-Player-Token'] = token;
   }
 
-  const response = await fetch(path, {
-    ...options,
-    credentials: 'include',
-    headers: {
-      ...headers,
-      ...(options.headers as Record<string, string> | undefined),
-    },
-  });
+  let response: Response;
+  try {
+    response = await fetch(path, {
+      ...options,
+      credentials: 'include',
+      headers: {
+        ...headers,
+        ...(options.headers as Record<string, string> | undefined),
+      },
+    });
+  } catch {
+    // fetch wirft nur bei Netzwerkproblemen (offline, Server nicht erreichbar)
+    throw new ApiError(
+      0,
+      'Keine Verbindung zum Server. Deine Eingabe wurde nicht gespeichert. Bitte prüfe die Internetverbindung und versuche es erneut.'
+    );
+  }
 
   if (!response.ok) {
-    let errorMessage = `HTTP Fehler ${response.status}`;
+    let errorMessage =
+      response.status >= 500
+        ? 'Der Server hat einen Fehler gemeldet. Bitte versuche es erneut oder melde dich bei der Spielleitung.'
+        : `Die Anfrage wurde abgelehnt (Fehler ${response.status}).`;
     try {
       const data = await response.json();
       if (data && typeof data.error === 'string') {

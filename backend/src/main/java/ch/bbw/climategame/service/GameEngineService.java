@@ -21,7 +21,6 @@ import ch.bbw.climategame.repository.PlayerSurveyRepository;
 import ch.bbw.climategame.repository.RoundInvestmentRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -38,8 +37,6 @@ import java.util.stream.Collectors;
 
 @Service
 public class GameEngineService {
-
-    public static final long INACTIVE_TIMEOUT_SECONDS = 30L;
 
     private final GameSessionRepository sessionRepository;
     private final PlayerRepository playerRepository;
@@ -103,13 +100,6 @@ public class GameEngineService {
         );
     }
 
-    @Scheduled(fixedRate = 5000)
-    @Transactional
-    public void kickInactivePlayers() {
-        Instant cutoff = Instant.now().minusSeconds(INACTIVE_TIMEOUT_SECONDS);
-        playerRepository.deleteInactiveLobbyPlayers(cutoff);
-    }
-
     @Transactional
     public void leaveLobby(String sessionToken) {
         if (sessionToken == null || sessionToken.isBlank()) {
@@ -123,18 +113,18 @@ public class GameEngineService {
         GameSession session = player.getSession();
         if (session.getStatus() == SessionStatus.LOBBY) {
             playerRepository.deletePlayerById(player.getId());
-        } else {
-            // Nach Spielstart/Spielende bleiben die Spielerdaten für den CSV-Export erhalten,
+        } else if (session.getStatus() == SessionStatus.FINISHED) {
+            // Nach Spielende bleiben die Spielerdaten für den CSV-Export erhalten,
             // aber das Token wird invalidiert, damit der Browser ausgeloggt ist.
             player.setSessionToken("left-" + UUID.randomUUID());
             playerRepository.save(player);
         }
+        // Während eines laufenden Spiels bleibt das Token gültig: Ein Spieler darf die Gruppe
+        // nicht durch "Verlassen" blockieren können.
     }
 
     @Transactional
     public JoinLobbyResponse joinLobby(String rawCode, String existingToken) {
-        kickInactivePlayers();
-
         String cleanCode = rawCode == null ? "" : rawCode.trim().toUpperCase();
         GameSession session = sessionRepository.findByCodeForUpdate(cleanCode)
                 .orElseThrow(() -> new ResponseStatusException(
@@ -153,14 +143,26 @@ public class GameEngineService {
             }
         }
 
+        List<Player> currentPlayers = playerRepository.findBySessionIdOrderByPlayerNumberAsc(session.getId());
+
         if (session.getStatus() != SessionStatus.LOBBY) {
+            // Wiedereinstieg: Hat die Spielleitung einen Platz für ein neues Gerät freigegeben,
+            // übernimmt dieses Gerät den bestehenden Spieler (gleiche Nummer, gleicher Spielstand).
+            Optional<Player> rejoinSlot = currentPlayers.stream().filter(Player::isRejoinAllowed).findFirst();
+            if (rejoinSlot.isPresent()) {
+                Player p = rejoinSlot.get();
+                p.setSessionToken(UUID.randomUUID() + "-" + UUID.randomUUID().toString().substring(0, 8));
+                p.setRejoinAllowed(false);
+                p.setLastSeenAt(Instant.now());
+                playerRepository.save(p);
+                return new JoinLobbyResponse(session.getId(), session.getCode(), p.getPlayerNumber(), p.getSessionToken());
+            }
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "Diesem Raum kann nicht mehr beigetreten werden (Status: " + session.getStatus() + ")."
+                    "Dieses Spiel hat bereits begonnen. Bitte melde dich bei der Spielleitung."
             );
         }
 
-        List<Player> currentPlayers = playerRepository.findBySessionIdOrderByPlayerNumberAsc(session.getId());
         if (currentPlayers.size() >= groupSize) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
@@ -198,8 +200,6 @@ public class GameEngineService {
 
     @Transactional
     public GameStateResponse getPlayerGameState(String sessionToken) {
-        kickInactivePlayers();
-
         if (sessionToken == null || sessionToken.isBlank()) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Kein gültiges Spieler-Token vorhanden.");
         }
@@ -210,14 +210,35 @@ public class GameEngineService {
                         "Spieler-Sitzung nicht gefunden oder abgelaufen."
                 ));
 
-        player.setLastSeenAt(Instant.now());
-        playerRepository.save(player);
+        // Reine Leseabfrage: Nur der «zuletzt gesehen»-Zeitpunkt wird gezielt aktualisiert,
+        // die Spielerzeile selbst wird hier nie zurückgeschrieben.
+        playerRepository.touchLastSeen(player.getId(), Instant.now());
 
         GameSession session = player.getSession();
         List<Player> allPlayers = playerRepository.findBySessionIdOrderByPlayerNumberAsc(session.getId());
         List<RoundInvestment> allInvestments = investmentRepository.findBySessionIdOrderByRoundNumberAscPlayerNumberAsc(session.getId());
 
         return buildGameStateResponse(session, player, allPlayers, allInvestments);
+    }
+
+    private record LockedPlayerContext(GameSession session, Player player) {
+    }
+
+    /**
+     * Sperrt zuerst die Session und lädt den Spieler erst danach. Alle Änderungen an Spielern einer Session
+     * laufen dadurch strikt nacheinander ab und arbeiten immer mit dem aktuell gespeicherten Stand.
+     */
+    private LockedPlayerContext lockSessionAndLoadPlayer(String sessionToken) {
+        if (sessionToken == null || sessionToken.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Kein gültiges Spieler-Token vorhanden.");
+        }
+        UUID sessionId = playerRepository.findSessionIdBySessionToken(sessionToken)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Spieler-Sitzung ungültig."));
+        GameSession session = sessionRepository.findByIdForUpdate(sessionId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session nicht gefunden."));
+        Player player = playerRepository.findBySessionToken(sessionToken)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Spieler-Sitzung ungültig."));
+        return new LockedPlayerContext(session, player);
     }
 
     @Transactional
@@ -236,18 +257,16 @@ public class GameEngineService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ungültige Beitritts-Option: " + rawChoice);
         }
 
-        Player tokenPlayer = playerRepository.findBySessionToken(sessionToken)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Spieler-Sitzung ungültig."));
-
-        GameSession session = sessionRepository.findByIdForUpdate(tokenPlayer.getSession().getId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session nicht gefunden."));
+        LockedPlayerContext locked = lockSessionAndLoadPlayer(sessionToken);
+        GameSession session = locked.session();
+        Player tokenPlayer = locked.player();
 
         if (session.getStatus() != SessionStatus.RUNNING || session.getRoundPhase() != RoundPhase.CONTRACT_JOIN) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Die Beitrittsphase zum Abkommen ist nicht aktiv.");
         }
 
         if (tokenPlayer.isContractJoinDecided()) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Sie haben bereits über den Beitritt zum Abkommen entschieden.");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Du hast bereits über den Beitritt zum Abkommen entschieden.");
         }
 
         tokenPlayer.setContractJoinDecided(true);
@@ -315,22 +334,16 @@ public class GameEngineService {
 
     @Transactional
     public GameStateResponse leaveContract(String sessionToken) {
-        if (sessionToken == null || sessionToken.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Kein gültiges Spieler-Token vorhanden.");
-        }
-
-        Player tokenPlayer = playerRepository.findBySessionToken(sessionToken)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Spieler-Sitzung ungültig."));
-
-        GameSession session = sessionRepository.findByIdForUpdate(tokenPlayer.getSession().getId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session nicht gefunden."));
+        LockedPlayerContext locked = lockSessionAndLoadPlayer(sessionToken);
+        GameSession session = locked.session();
+        Player tokenPlayer = locked.player();
 
         if (session.getStatus() != SessionStatus.RUNNING || session.getRoundPhase() != RoundPhase.INVESTMENT) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Ein Austritt ist nur während einer laufenden Spielrunde möglich.");
         }
 
         if (!tokenPlayer.isInContract()) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Sie sind aktuell kein Mitglied des Abkommens.");
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Du bist aktuell kein Mitglied des Abkommens.");
         }
 
         int currentRound = session.getCurrentRound();
@@ -344,7 +357,7 @@ public class GameEngineService {
         if (tokenPlayer.getLeftContractAtRound() != null) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "Sie haben den Austritt für die nächste Runde bereits vorgemerkt."
+                    "Du hast den Austritt für die nächste Runde bereits vorgemerkt."
             );
         }
 
@@ -365,15 +378,9 @@ public class GameEngineService {
 
     @Transactional
     public GameStateResponse submitInvestment(String sessionToken, int amountRappen) {
-        if (sessionToken == null || sessionToken.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Kein gültiges Spieler-Token vorhanden.");
-        }
-
-        Player tokenPlayer = playerRepository.findBySessionToken(sessionToken)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Spieler-Sitzung ungültig."));
-
-        GameSession session = sessionRepository.findByIdForUpdate(tokenPlayer.getSession().getId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session nicht gefunden."));
+        LockedPlayerContext locked = lockSessionAndLoadPlayer(sessionToken);
+        GameSession session = locked.session();
+        Player tokenPlayer = locked.player();
 
         if (session.getStatus() != SessionStatus.RUNNING || session.getRoundPhase() != RoundPhase.INVESTMENT) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Investitionen sind erst möglich, sobald die Einzahlungsphase der Runde aktiv ist.");
@@ -381,7 +388,7 @@ public class GameEngineService {
 
         int currentRound = session.getCurrentRound();
         if (investmentRepository.existsBySessionIdAndRoundNumberAndPlayerNumber(session.getId(), currentRound, tokenPlayer.getPlayerNumber())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Sie haben in Runde " + currentRound + " bereits investiert.");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Du hast in Runde " + currentRound + " bereits eingezahlt.");
         }
 
         List<Integer> allowedOptions = getAllowedInvestmentOptions();
@@ -396,7 +403,7 @@ public class GameEngineService {
         if (amountRappen < minRequiredRappen) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Als Mitglied des Abkommens müssen Sie mindestens den vorgeschriebenen Mindestbeitrag pro Runde investieren."
+                    "Als Mitglied des Abkommens musst du mindestens den Mindestbeitrag pro Runde einzahlen."
             );
         }
 
@@ -422,22 +429,16 @@ public class GameEngineService {
 
     @Transactional
     public GameStateResponse submitSurvey(String sessionToken, SubmitSurveyRequest request) {
-        if (sessionToken == null || sessionToken.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Kein gültiges Spieler-Token vorhanden.");
-        }
-
-        Player tokenPlayer = playerRepository.findBySessionToken(sessionToken)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Spieler-Sitzung ungültig."));
-
-        GameSession session = sessionRepository.findByIdForUpdate(tokenPlayer.getSession().getId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session nicht gefunden."));
+        LockedPlayerContext locked = lockSessionAndLoadPlayer(sessionToken);
+        GameSession session = locked.session();
+        Player tokenPlayer = locked.player();
 
         if (session.getStatus() != SessionStatus.FINISHED) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Der Fragebogen kann erst nach Abschluss der 10 Runden ausgefüllt werden.");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Der Fragebogen kann erst nach Abschluss aller Runden ausgefüllt werden.");
         }
 
         if (surveyRepository.existsBySessionIdAndPlayerNumber(session.getId(), tokenPlayer.getPlayerNumber())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Sie haben den Fragebogen bereits abgeschickt.");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Du hast den Fragebogen bereits abgeschickt.");
         }
 
         String formattedRanking = formatRankingList(request.motivationRanking());
@@ -581,12 +582,21 @@ public class GameEngineService {
             List<RoundInvestment> allInvestments,
             int groupSize
     ) {
-        if (session.getStatus() != SessionStatus.RUNNING || session.getCurrentRound() <= 1) {
+        if (session.getStatus() != SessionStatus.RUNNING || session.getCurrentRound() < 1) {
             return List.of();
         }
 
-        int lastCompletedRound = session.getCurrentRound() - 1;
-        return List.of(buildSingleRoundHistoryDto(lastCompletedRound, allInvestments, groupSize));
+        // Haben alle Spieler der laufenden Runde entschieden, werden deren Beiträge sofort allen gezeigt
+        // (wie in der Spielanleitung beschrieben). Vorher ist nur die vorangegangene Runde sichtbar.
+        int currentRound = session.getCurrentRound();
+        long submittedThisRound = allInvestments.stream()
+                .filter(inv -> inv.getRoundNumber() == currentRound)
+                .count();
+        int visibleRound = submittedThisRound >= groupSize ? currentRound : currentRound - 1;
+        if (visibleRound < 1) {
+            return List.of();
+        }
+        return List.of(buildSingleRoundHistoryDto(visibleRound, allInvestments, groupSize));
     }
 
     public List<RoundHistoryDto> buildFullRoundHistory(
@@ -635,6 +645,8 @@ public class GameEngineService {
     ) {
         int currentRound = session.getCurrentRound();
         RoundPhase roundPhase = session.getRoundPhase() != null ? session.getRoundPhase() : RoundPhase.INVESTMENT;
+        // Solange nicht alle über den Beitritt entschieden haben, darf niemand sehen, wer bereits «Ja» gewählt hat.
+        boolean joinPhaseOpen = session.getStatus() == SessionStatus.RUNNING && roundPhase == RoundPhase.CONTRACT_JOIN;
 
         Map<Integer, Player> playerByNumber = allPlayers.stream()
                 .collect(Collectors.toMap(Player::getPlayerNumber, p -> p));
@@ -670,7 +682,7 @@ public class GameEngineService {
                 ownTotalInvested,
                 hasSubmittedRound,
                 hasSubmittedSurvey,
-                player.isInContract(),
+                !joinPhaseOpen && player.isInContract(),
                 player.isEverJoinedContract(),
                 player.isLeftContract(),
                 player.getContractJoinChoice(),
@@ -683,7 +695,7 @@ public class GameEngineService {
         for (int pNum = 1; pNum <= groupSize; pNum++) {
             Player slotPlayer = playerByNumber.get(pNum);
             boolean isConnected = slotPlayer != null;
-            boolean inContract = slotPlayer != null && slotPlayer.isInContract();
+            boolean inContract = !joinPhaseOpen && slotPlayer != null && slotPlayer.isInContract();
             boolean leftContract = slotPlayer != null && slotPlayer.isLeftContract();
             boolean isReady;
             if (session.getStatus() == SessionStatus.LOBBY) {
@@ -698,7 +710,7 @@ public class GameEngineService {
             slots.add(new PlayerSlotStatusDto(pNum, isConnected, isReady, inContract, leftContract));
         }
 
-        int memberCount = (int) allPlayers.stream().filter(Player::isInContract).count();
+        int memberCount = joinPhaseOpen ? 0 : (int) allPlayers.stream().filter(Player::isInContract).count();
         int fivePercentRappen = getFivePercentRappen(player.getInitialBalanceRappen());
         boolean canLeaveContractNow = session.getStatus() == SessionStatus.RUNNING
                 && roundPhase == RoundPhase.INVESTMENT

@@ -7,6 +7,10 @@ spring:
     username: ${SPRING_DATASOURCE_USERNAME:climate_user}
     password: ${SPRING_DATASOURCE_PASSWORD:climate_password}
     driver-class-name: org.postgresql.Driver
+  jackson:
+    deserialization:
+      # Beträge wie 30.7 nicht stillschweigend auf 30 abrunden, sondern ablehnen
+      accept-float-as-int: false
   jpa:
     hibernate:
       ddl-auto: update

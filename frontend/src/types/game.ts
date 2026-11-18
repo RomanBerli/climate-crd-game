@@ -111,6 +111,8 @@ export interface AdminPlayerDto {
   leftContract: boolean;
   finalPayoutRappen: number | null;
   lastSeenAt: string | null;
+  secondsSinceLastSeen: number | null;
+  rejoinAllowed: boolean;
 }
 
 export interface AdminSessionResponse {

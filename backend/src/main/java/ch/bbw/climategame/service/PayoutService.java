@@ -64,13 +64,13 @@ public class PayoutService {
         String message;
         if (goalReached) {
             scenarioCode = "SCENARIO_A_GOAL_REACHED";
-            message = "Klimaziel erreicht! Ihr Restguthaben wird ausbezahlt.";
+            message = "Klimaziel erreicht! Dein Restguthaben wird ausbezahlt.";
         } else if (!riskOccurred) {
             scenarioCode = "SCENARIO_B_GOAL_MISSED_LUCK";
-            message = "Ziel verfehlt. Sie hatten Glück: Ihr Restguthaben bleibt erhalten.";
+            message = "Ziel verfehlt. Du hattest Glück: Dein Restguthaben bleibt erhalten.";
         } else {
             scenarioCode = "SCENARIO_C_GOAL_MISSED_LOSS";
-            message = "Ziel verfehlt. Ihr Geld ging durch das " + riskPercent + "% Risiko verloren. Auszahlung: 0 Fr.";
+            message = "Ziel verfehlt. Dein Geld ging durch das " + riskPercent + "% Risiko verloren. Auszahlung: 0 Fr.";
         }
 
         return new EndgameResultDto(

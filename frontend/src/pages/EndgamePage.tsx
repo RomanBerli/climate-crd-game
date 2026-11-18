@@ -36,7 +36,7 @@ export const EndgamePage: React.FC<EndgamePageProps> = ({
       <section className="endgame-card">
         <div className="endgame-card__identifiers" style={{ gridTemplateColumns: '1fr' }}>
           <div className="endgame-id-box">
-            <span className="endgame-id-box__label">Ihre Identifikation</span>
+            <span className="endgame-id-box__label">Deine Spielernummer</span>
             <strong className="endgame-id-box__value">Spieler {player.playerNumber}</strong>
           </div>
         </div>
@@ -50,16 +50,16 @@ export const EndgamePage: React.FC<EndgamePageProps> = ({
               : 'endgame-result-banner--loss'
           }`}
         >
-          <h1>Spiel abgeschlossen (10 / 10 Runden)</h1>
+          <h1>Spiel abgeschlossen ({gameState.totalRounds} / {gameState.totalRounds} Runden)</h1>
           <p className="endgame-result-banner__message">
             {endgame?.message ||
-              'Das Spiel ist beendet. Bitte zeigen Sie diesen Bildschirm der Spielleitung zur Auszahlung.'}
+              'Das Spiel ist beendet. Bitte zeige diesen Bildschirm der Spielleitung zur Auszahlung.'}
           </p>
         </div>
 
         <div className="endgame-payout-display">
           <span className="endgame-payout-display__label">
-            Ihr finaler Auszahlungsbetrag (Spieler {player.playerNumber})
+            Dein Auszahlungsbetrag (Spieler {player.playerNumber})
           </span>
           <strong className="endgame-payout-display__amount">{formatFr(payoutRappen)}</strong>
           <div className="endgame-payout-display__breakdown">
@@ -69,7 +69,7 @@ export const EndgamePage: React.FC<EndgamePageProps> = ({
             <span>•</span>
             <span>Startkapital: {formatFr(player.initialBalanceRappen)}</span>
             <span>•</span>
-            <span>Ihre getätigten Einzahlungen: {formatFr(player.ownTotalInvestedRappen)}</span>
+            <span>Deine Einzahlungen: {formatFr(player.ownTotalInvestedRappen)}</span>
             <span>•</span>
             <span>Restguthaben vor Risiko-Prüfung: {formatFr(player.currentBalanceRappen)}</span>
           </div>
@@ -91,7 +91,7 @@ export const EndgamePage: React.FC<EndgamePageProps> = ({
                         className={pNum === player.playerNumber ? 'history-table__col--me' : ''}
                       >
                         Spieler {pNum}
-                        {pNum === player.playerNumber ? ' (Sie)' : ''}
+                        {pNum === player.playerNumber ? ' (du)' : ''}
                       </th>
                     ))}
                     <th>Runden-Total</th>

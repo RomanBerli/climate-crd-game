@@ -8,6 +8,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -68,6 +69,26 @@ public class AdminController {
     @PostMapping("/sessions/{id}/next-round")
     public ResponseEntity<AdminSessionResponse> advanceRound(@PathVariable UUID id) {
         return ResponseEntity.ok(adminService.advanceRound(id));
+    }
+
+    @DeleteMapping("/sessions/{id}")
+    public ResponseEntity<Void> deleteUnfinishedSession(@PathVariable UUID id) {
+        adminService.deleteUnfinishedSession(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/sessions/{id}/players/{playerNumber}")
+    public ResponseEntity<AdminSessionResponse> removeLobbyPlayer(@PathVariable UUID id, @PathVariable int playerNumber) {
+        return ResponseEntity.ok(adminService.removeLobbyPlayer(id, playerNumber));
+    }
+
+    @PostMapping("/sessions/{id}/players/{playerNumber}/rejoin")
+    public ResponseEntity<AdminSessionResponse> setRejoinAllowed(
+            @PathVariable UUID id,
+            @PathVariable int playerNumber,
+            @RequestParam(name = "allowed", defaultValue = "true") boolean allowed
+    ) {
+        return ResponseEntity.ok(adminService.setRejoinAllowed(id, playerNumber, allowed));
     }
 
     @GetMapping(value = "/sessions/{id}/export.csv", produces = "text/csv;charset=UTF-8")

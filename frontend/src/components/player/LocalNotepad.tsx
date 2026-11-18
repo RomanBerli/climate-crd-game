@@ -16,7 +16,7 @@ export const LocalNotepad: React.FC<LocalNotepadProps> = ({ notes, onChange }) =
         value={notes}
         onChange={(e) => onChange(e.target.value)}
         placeholder="Eigene Notizen & Rechnungen..."
-        rows={12}
+        rows={10}
       />
     </aside>
   );

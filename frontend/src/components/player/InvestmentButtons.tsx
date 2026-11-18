@@ -8,9 +8,15 @@ interface InvestmentButtonsProps {
   hasSubmitted: boolean;
   submittedAmount: number | null;
   allPlayersReady: boolean;
+  isLastRound: boolean;
   onInvest: (amountRappen: number) => Promise<void>;
 }
 
+/**
+ * Zweistufige Eingabe: Betrag auswählen, dann ausdrücklich bestätigen.
+ * So landet kein Vertipper unwiderruflich in den Experimentdaten. Die Auswahl ist zu Beginn
+ * jeder Runde leer (die Komponente wird pro Runde neu aufgebaut), es gibt also keine Vorauswahl.
+ */
 export const InvestmentButtons: React.FC<InvestmentButtonsProps> = ({
   initialBalanceRappen,
   currentBalanceRappen,
@@ -18,17 +24,19 @@ export const InvestmentButtons: React.FC<InvestmentButtonsProps> = ({
   hasSubmitted,
   submittedAmount,
   allPlayersReady,
+  isLastRound,
   onInvest,
 }) => {
-  const [submittingAmount, setSubmittingAmount] = useState<number | null>(null);
+  const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
+  const [submitting, setSubmitting] = useState<boolean>(false);
 
-  const handleSelect = async (amount: number) => {
-    if (hasSubmitted || submittingAmount !== null) return;
-    setSubmittingAmount(amount);
+  const handleConfirm = async () => {
+    if (hasSubmitted || submitting || selectedAmount === null) return;
+    setSubmitting(true);
     try {
-      await onInvest(amount);
+      await onInvest(selectedAmount);
     } finally {
-      setSubmittingAmount(null);
+      setSubmitting(false);
     }
   };
 
@@ -53,32 +61,54 @@ export const InvestmentButtons: React.FC<InvestmentButtonsProps> = ({
         <div className="investment-confirmed">
           <div className="investment-confirmed__icon">✓</div>
           <div>
-            <h3>Einsatz für diese Runde eingeloggt: {formatFr(submittedAmount ?? 0)}</h3>
+            <h3>Dein Beitrag für diese Runde: {formatFr(submittedAmount ?? 0)}</h3>
             <p>
               {allPlayersReady
-                ? 'Alle Spieler haben gewählt...'
-                : 'Warten auf die verbleibenden Mitspieler...'}
+                ? isLastRound
+                  ? 'Alle haben entschieden. Unten siehst du die Beiträge dieser Runde. Die Spielleitung schliesst das Spiel ab.'
+                  : 'Alle haben entschieden. Unten siehst du die Beiträge dieser Runde. Die Spielleitung startet die nächste Runde.'
+                : 'Warte auf die anderen Spieler...'}
             </p>
           </div>
         </div>
       ) : (
-        <div className="investment-grid">
-          {dynamicOptions.map((amount) => {
-            const isAllowed = allowedOptions.includes(amount) && currentBalanceRappen >= amount;
+        <>
+          <div className="investment-grid">
+            {dynamicOptions.map((amount) => {
+              const isAllowed = allowedOptions.includes(amount) && currentBalanceRappen >= amount;
+              const isSelected = selectedAmount === amount;
 
-            return (
-              <button
-                key={amount}
-                type="button"
-                className={`invest-btn invest-btn--${amount}`}
-                disabled={!isAllowed || submittingAmount !== null}
-                onClick={() => handleSelect(amount)}
-              >
-                <span className="invest-btn__amount">{formatFr(amount)}</span>
-              </button>
-            );
-          })}
-        </div>
+              return (
+                <button
+                  key={amount}
+                  type="button"
+                  className={`invest-btn invest-btn--${amount} ${isSelected ? 'invest-btn--selected' : ''}`}
+                  disabled={!isAllowed || submitting}
+                  aria-pressed={isSelected}
+                  onClick={() => setSelectedAmount(amount)}
+                >
+                  <span className="invest-btn__amount">{formatFr(amount)}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="confirm-row">
+            <span className="confirm-row__hint">
+              {selectedAmount === null
+                ? 'Wähle einen Betrag und bestätige ihn danach.'
+                : `Ausgewählt: ${formatFr(selectedAmount)} – nach dem Bestätigen kannst du den Beitrag nicht mehr ändern.`}
+            </span>
+            <button
+              type="button"
+              className="btn btn--primary confirm-row__button"
+              disabled={selectedAmount === null || submitting}
+              onClick={handleConfirm}
+            >
+              {submitting ? 'Wird gespeichert...' : 'Beitrag bestätigen'}
+            </button>
+          </div>
+        </>
       )}
     </section>
   );

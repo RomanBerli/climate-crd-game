@@ -22,7 +22,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
     e.preventDefault();
     const cleaned = roomCode.trim().toUpperCase();
     if (cleaned.length !== 4) {
-      setError('Bitte geben Sie einen 4-stelligen Spielcode ein (z. B. X7K9).');
+      setError('Bitte gib den 4-stelligen Spielcode ein (z. B. X7K9).');
       return;
     }
     setSubmitting(true);
@@ -47,7 +47,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
     return (
       <main className="page-container page-container--centered">
         <div className="lobby-waiting-card">
-          <h1>Warteraum – Sie sind Spieler {gameState.player.playerNumber}</h1>
+          <h1>Warteraum – du bist Spieler {gameState.player.playerNumber}</h1>
           <p className="lobby-waiting-card__subtitle">
             Sobald alle {gameState.groupSize} Spieler beigetreten sind, startet die Spielleitung das Spiel.
           </p>
@@ -69,7 +69,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
         <div className="lobby-login-card__header">
           <h1>Klimaspiel</h1>
           <p>
-            Geben Sie den 4-stelligen Spielcode ein, den Sie von der Spielleitung erhalten haben.
+            Gib den 4-stelligen Spielcode ein, den du von der Spielleitung erhalten hast.
           </p>
         </div>
 

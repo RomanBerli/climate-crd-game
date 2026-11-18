@@ -20,6 +20,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -82,7 +83,6 @@ public class AdminService {
 
     @Transactional
     public List<AdminSessionResponse> getAllSessions() {
-        gameEngineService.kickInactivePlayers();
         return sessionRepository.findAllByOrderByCreatedAtDesc().stream()
                 .map(this::buildAdminSessionResponse)
                 .toList();
@@ -90,7 +90,6 @@ public class AdminService {
 
     @Transactional
     public AdminSessionResponse getSession(UUID sessionId) {
-        gameEngineService.kickInactivePlayers();
         GameSession session = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session nicht gefunden."));
         return buildAdminSessionResponse(session);
@@ -98,7 +97,6 @@ public class AdminService {
 
     @Transactional
     public AdminSessionResponse startSession(UUID sessionId) {
-        gameEngineService.kickInactivePlayers();
         GameSession session = sessionRepository.findByIdForUpdate(sessionId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session nicht gefunden."));
 
@@ -152,6 +150,68 @@ public class AdminService {
         return buildAdminSessionResponse(session);
     }
 
+    /** Entfernt einen Spieler aus dem Warteraum (z. B. geschlossener Tab), damit der Platz wieder frei wird. */
+    @Transactional
+    public AdminSessionResponse removeLobbyPlayer(UUID sessionId, int playerNumber) {
+        GameSession session = sessionRepository.findByIdForUpdate(sessionId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session nicht gefunden."));
+        if (session.getStatus() != SessionStatus.LOBBY) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Spieler können nur im Warteraum entfernt werden. Im laufenden Spiel bitte «Neues Gerät zulassen» verwenden."
+            );
+        }
+        Player player = findPlayerOrThrow(session, playerNumber);
+        playerRepository.deletePlayerById(player.getId());
+        return buildAdminSessionResponse(session);
+    }
+
+    /**
+     * Gibt den Platz eines Spielers für ein neues Gerät frei (oder nimmt die Freigabe zurück).
+     * Das nächste Gerät, das den Raumcode eingibt, übernimmt diesen Spieler mit unverändertem Spielstand.
+     */
+    @Transactional
+    public AdminSessionResponse setRejoinAllowed(UUID sessionId, int playerNumber, boolean allowed) {
+        GameSession session = sessionRepository.findByIdForUpdate(sessionId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session nicht gefunden."));
+        if (session.getStatus() == SessionStatus.LOBBY) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Im Warteraum ist keine Freigabe nötig: Spieler entfernen und mit dem Raumcode neu beitreten lassen."
+            );
+        }
+        Player player = findPlayerOrThrow(session, playerNumber);
+        player.setRejoinAllowed(allowed);
+        playerRepository.save(player);
+        return buildAdminSessionResponse(session);
+    }
+
+    /**
+     * Bricht eine noch nicht abgeschlossene Session ab und löscht sie. Die Geräte der Spieler kehren
+     * automatisch zur Code-Eingabe zurück. Abgeschlossene Sessions (Experimentdaten) sind geschützt.
+     */
+    @Transactional
+    public void deleteUnfinishedSession(UUID sessionId) {
+        GameSession session = sessionRepository.findByIdForUpdate(sessionId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session nicht gefunden."));
+        if (session.getStatus() == SessionStatus.FINISHED) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Abgeschlossene Sessions enthalten Experimentdaten und können nicht gelöscht werden."
+            );
+        }
+        investmentRepository.deleteAllBySessionId(sessionId);
+        playerRepository.deleteAllBySessionId(sessionId);
+        sessionRepository.deleteSessionById(sessionId);
+    }
+
+    private Player findPlayerOrThrow(GameSession session, int playerNumber) {
+        return playerRepository.findBySessionIdOrderByPlayerNumberAsc(session.getId()).stream()
+                .filter(p -> p.getPlayerNumber() == playerNumber)
+                .findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Spieler " + playerNumber + " nicht gefunden."));
+    }
+
     @Transactional(readOnly = true)
     public String exportSessionCsv(UUID sessionId) {
         return exportSessionCsv(sessionId, "all");
@@ -185,7 +245,7 @@ public class AdminService {
 
         StringBuilder sb = new StringBuilder();
         sb.append('\uFEFF');
-        sb.append("session_code,game_mode,target_sum_rappen,total_invested_rappen,target_reached,risk_occurred,player_number,player_total_invested_rappen,balance_before_risk_rappen,final_payout_rappen,final_payout_chf,contract_join_choice,ever_joined_contract,left_contract,in_contract_at_end,left_contract_at_round\n");
+        sb.append("session_code,game_mode,target_sum_rappen,total_invested_rappen,target_reached,risk_occurred,player_number,player_total_invested_rappen,balance_before_risk_rappen,final_payout_rappen,final_payout_chf,contract_join_choice,ever_joined_contract,left_contract,in_contract_at_end,left_contract_at_round,risk_level,session_created_at\n");
 
         for (Player p : players) {
             int playerTotalInvested = totalInvestedByPlayer.getOrDefault(p.getPlayerNumber(), 0);
@@ -208,7 +268,9 @@ public class AdminService {
                     .append(p.isEverJoinedContract()).append(',')
                     .append(p.isLeftContract()).append(',')
                     .append(p.isInContract()).append(',')
-                    .append(p.getLeftContractAtRound() != null ? p.getLeftContractAtRound() : "")
+                    .append(p.getLeftContractAtRound() != null ? p.getLeftContractAtRound() : "").append(',')
+                    .append(session.getRiskLevel().toPlainString()).append(',')
+                    .append(csvEscape(session.getCreatedAt() != null ? session.getCreatedAt().toString() : ""))
                     .append('\n');
         }
 
@@ -256,7 +318,7 @@ public class AdminService {
 
         StringBuilder sb = new StringBuilder();
         sb.append('\uFEFF');
-        sb.append("session_code,player_number,survey_strategy,survey_reaction_unfairness,survey_contract_joined_reason,survey_contract_not_joined_reason,survey_contract_left_reason,survey_age,survey_gender\n");
+        sb.append("session_code,player_number,survey_strategy,survey_reaction_unfairness,survey_contract_joined_reason,survey_contract_not_joined_reason,survey_contract_left_reason,survey_age,survey_gender,survey_submitted_at\n");
 
         for (Player p : players) {
             PlayerSurvey survey = surveyByNumber.get(p.getPlayerNumber());
@@ -269,7 +331,8 @@ public class AdminService {
                     .append(csvEscape(survey != null ? survey.getContractNotJoinedReason() : "")).append(',')
                     .append(csvEscape(survey != null ? survey.getContractLeftReason() : "")).append(',')
                     .append(survey != null ? survey.getAge() : "").append(',')
-                    .append(csvEscape(survey != null ? survey.getGender() : ""))
+                    .append(csvEscape(survey != null ? survey.getGender() : "")).append(',')
+                    .append(csvEscape(survey != null && survey.getSubmittedAt() != null ? survey.getSubmittedAt().toString() : ""))
                     .append('\n');
         }
 
@@ -287,7 +350,7 @@ public class AdminService {
 
         StringBuilder sb = new StringBuilder();
         sb.append('\uFEFF');
-        sb.append("session_code,player_number,final_payout_rappen,final_payout_chf,survey_twint_number\n");
+        sb.append("session_code,player_number,final_payout_rappen,final_payout_chf,survey_twint_number,payout_method\n");
 
         for (Player p : players) {
             PlayerSurvey survey = surveyByNumber.get(p.getPlayerNumber());
@@ -298,7 +361,8 @@ public class AdminService {
                     .append(p.getPlayerNumber()).append(',')
                     .append(finalPayoutRappen).append(',')
                     .append(finalPayoutChf).append(',')
-                    .append(csvEscape(survey != null ? survey.getTwintPhone() : ""))
+                    .append(csvEscape(survey != null ? survey.getTwintPhone() : "")).append(',')
+                    .append(csvEscape(survey == null ? "" : (survey.getTwintPhone() != null && survey.getTwintPhone().startsWith("Bar") ? "BAR" : "TWINT")))
                     .append('\n');
         }
 
@@ -330,7 +394,7 @@ public class AdminService {
         StringBuilder sb = new StringBuilder();
         // UTF-8 BOM für korrekte Umlaute in Microsoft Excel
         sb.append('\uFEFF');
-        sb.append("session_code,game_mode,target_sum_rappen,total_invested_rappen,target_reached,risk_occurred,round,player_number,invested_rappen,invested_chf,submitted_at,currently_in_contract,player_total_invested_rappen,balance_before_risk_rappen,final_payout_rappen,final_payout_chf,contract_join_choice,ever_joined_contract,left_contract,in_contract_at_end,left_contract_at_round,survey_strategy,survey_reaction_unfairness,survey_contract_joined_reason,survey_contract_not_joined_reason,survey_contract_left_reason,survey_age,survey_gender\n");
+        sb.append("session_code,game_mode,target_sum_rappen,total_invested_rappen,target_reached,risk_occurred,round,player_number,invested_rappen,invested_chf,submitted_at,currently_in_contract,player_total_invested_rappen,balance_before_risk_rappen,final_payout_rappen,final_payout_chf,contract_join_choice,ever_joined_contract,left_contract,in_contract_at_end,left_contract_at_round,survey_strategy,survey_reaction_unfairness,survey_contract_joined_reason,survey_contract_not_joined_reason,survey_contract_left_reason,survey_age,survey_gender,risk_level,survey_submitted_at\n");
 
         for (RoundInvestment inv : investments) {
             Player p = playerByNumber.get(inv.getPlayerNumber());
@@ -371,7 +435,9 @@ public class AdminService {
                     .append(csvEscape(survey != null ? survey.getContractNotJoinedReason() : "")).append(',')
                     .append(csvEscape(survey != null ? survey.getContractLeftReason() : "")).append(',')
                     .append(survey != null ? survey.getAge() : "").append(',')
-                    .append(csvEscape(survey != null ? survey.getGender() : ""))
+                    .append(csvEscape(survey != null ? survey.getGender() : "")).append(',')
+                    .append(session.getRiskLevel().toPlainString()).append(',')
+                    .append(csvEscape(survey != null && survey.getSubmittedAt() != null ? survey.getSubmittedAt().toString() : ""))
                     .append('\n');
         }
 
@@ -414,6 +480,10 @@ public class AdminService {
         Map<Integer, RoundInvestment> currentRoundInvestments = currentRoundInvestmentsList.stream()
                 .collect(Collectors.toMap(RoundInvestment::getPlayerNumber, inv -> inv, (a, b) -> a));
 
+        // Das Leitungsgerät ist evtl. für die Gruppe sichtbar: Beitrittsentscheide erst zeigen, wenn alle entschieden haben.
+        boolean joinPhaseOpen = session.getStatus() == SessionStatus.RUNNING && roundPhase == RoundPhase.CONTRACT_JOIN;
+        Instant now = Instant.now();
+
         List<AdminSessionResponse.AdminPlayerDto> adminPlayers = new ArrayList<>();
         int readyPlayersCount = 0;
 
@@ -442,10 +512,12 @@ public class AdminService {
                         pNum,
                         true,
                         isReady,
-                        p.isInContract(),
+                        !joinPhaseOpen && p.isInContract(),
                         p.isLeftContract(),
                         p.getFinalPayoutRappen(),
-                        p.getLastSeenAt()
+                        p.getLastSeenAt(),
+                        p.getLastSeenAt() != null ? Math.max(0, Duration.between(p.getLastSeenAt(), now).getSeconds()) : null,
+                        p.isRejoinAllowed()
                 ));
             } else {
                 adminPlayers.add(new AdminSessionResponse.AdminPlayerDto(
@@ -455,12 +527,14 @@ public class AdminService {
                         false,
                         false,
                         null,
-                        null
+                        null,
+                        null,
+                        false
                 ));
             }
         }
 
-        int contractMemberCount = (int) players.stream().filter(Player::isInContract).count();
+        int contractMemberCount = joinPhaseOpen ? 0 : (int) players.stream().filter(Player::isInContract).count();
         boolean canAdvanceRound = session.getStatus() == SessionStatus.RUNNING
                 && roundPhase == RoundPhase.INVESTMENT
                 && readyPlayersCount >= groupSize;

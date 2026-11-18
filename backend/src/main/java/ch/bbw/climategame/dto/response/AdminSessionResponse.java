@@ -40,7 +40,9 @@ public record AdminSessionResponse(
             boolean inContract,
             boolean leftContract,
             Integer finalPayoutRappen,
-            Instant lastSeenAt
+            Instant lastSeenAt,
+            Long secondsSinceLastSeen,
+            boolean rejoinAllowed
     ) {
     }
 }

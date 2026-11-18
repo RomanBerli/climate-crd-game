@@ -17,6 +17,18 @@ public interface PlayerRepository extends JpaRepository<Player, UUID> {
 
     Optional<Player> findBySessionToken(String sessionToken);
 
+    /** Liefert nur die Session-ID, ohne die Spielerzeile zu laden (um zuerst die Session sperren zu können). */
+    @Query("SELECT p.session.id FROM Player p WHERE p.sessionToken = :sessionToken")
+    Optional<UUID> findSessionIdBySessionToken(@Param("sessionToken") String sessionToken);
+
+    /**
+     * Aktualisiert ausschliesslich den «zuletzt gesehen»-Zeitpunkt. Die Statusabfrage der Browser (jede Sekunde)
+     * darf nie die ganze Spielerzeile zurückschreiben, sonst überschreibt sie gleichzeitig gespeicherte Werte.
+     */
+    @Modifying
+    @Query("UPDATE Player p SET p.lastSeenAt = :now WHERE p.id = :playerId")
+    int touchLastSeen(@Param("playerId") UUID playerId, @Param("now") Instant now);
+
     List<Player> findBySessionIdOrderByPlayerNumberAsc(UUID sessionId);
 
     int countBySessionId(UUID sessionId);
@@ -26,6 +38,6 @@ public interface PlayerRepository extends JpaRepository<Player, UUID> {
     void deletePlayerById(@Param("playerId") UUID playerId);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("DELETE FROM Player p WHERE p.session.status = ch.bbw.climategame.entity.SessionStatus.LOBBY AND p.lastSeenAt < :cutoff")
-    int deleteInactiveLobbyPlayers(@Param("cutoff") Instant cutoff);
+    @Query("DELETE FROM Player p WHERE p.session.id = :sessionId")
+    int deleteAllBySessionId(@Param("sessionId") UUID sessionId);
 }

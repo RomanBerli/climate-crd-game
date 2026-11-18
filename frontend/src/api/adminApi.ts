@@ -48,6 +48,31 @@ export async function advanceAdminRound(sessionId: string, adminKey?: string): P
   );
 }
 
+export async function removeLobbyPlayer(sessionId: string, playerNumber: number, adminKey?: string): Promise<AdminSessionResponse> {
+  return apiRequest<AdminSessionResponse>(
+    `/api/admin/sessions/${sessionId}/players/${playerNumber}`,
+    { method: 'DELETE' },
+    adminHeaders(adminKey)
+  );
+}
+
+export async function setPlayerRejoinAllowed(
+  sessionId: string,
+  playerNumber: number,
+  allowed: boolean,
+  adminKey?: string
+): Promise<AdminSessionResponse> {
+  return apiRequest<AdminSessionResponse>(
+    `/api/admin/sessions/${sessionId}/players/${playerNumber}/rejoin?allowed=${allowed ? 'true' : 'false'}`,
+    { method: 'POST' },
+    adminHeaders(adminKey)
+  );
+}
+
+export async function deleteUnfinishedSession(sessionId: string, adminKey?: string): Promise<void> {
+  return apiRequest<void>(`/api/admin/sessions/${sessionId}`, { method: 'DELETE' }, adminHeaders(adminKey));
+}
+
 export async function downloadSessionCsv(
   sessionId: string,
   sessionCode: string,
