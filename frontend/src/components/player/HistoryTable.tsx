@@ -25,9 +25,9 @@ export const HistoryTable: React.FC<HistoryTableProps> = ({
         <h3 className="section-title" style={{ marginBottom: 0 }}>
           {lastRoundEntry
             ? lastRoundEntry.round === currentRound
-              ? `Beiträge dieser Runde (Runde ${lastRoundEntry.round})`
-              : `Beiträge der letzten Runde (Runde ${lastRoundEntry.round})`
-            : 'Beiträge der Runde'}
+              ? `Investitionen dieser Runde (Runde ${lastRoundEntry.round})`
+              : `Investitionen der letzten Runde (Runde ${lastRoundEntry.round})`
+            : 'Investitionen der Runde'}
         </h3>
       </div>
 

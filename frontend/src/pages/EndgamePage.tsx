@@ -69,7 +69,7 @@ export const EndgamePage: React.FC<EndgamePageProps> = ({
             <span>•</span>
             <span>Startkapital: {formatFr(player.initialBalanceRappen)}</span>
             <span>•</span>
-            <span>Deine Einzahlungen: {formatFr(player.ownTotalInvestedRappen)}</span>
+            <span>Deine Investitionen: {formatFr(player.ownTotalInvestedRappen)}</span>
             <span>•</span>
             <span>Restguthaben vor Risiko-Prüfung: {formatFr(player.currentBalanceRappen)}</span>
           </div>
@@ -78,7 +78,7 @@ export const EndgamePage: React.FC<EndgamePageProps> = ({
         {history.length > 0 && (
           <div className="history-card" style={{ boxShadow: 'none' }}>
             <div className="history-card__header">
-              <h3 className="section-title">Alle Einzahlungen aller Spieler (Runde 1 – {history.length})</h3>
+              <h3 className="section-title">Alle Investitionen aller Spieler (Runde 1 – {history.length})</h3>
             </div>
             <div className="history-table-wrapper">
               <table className="history-table">
