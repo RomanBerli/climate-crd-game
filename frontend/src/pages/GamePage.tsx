@@ -30,7 +30,7 @@ export const GamePage: React.FC<GamePageProps> = ({
       const updated = await submitInvestment(amountRappen);
       onStateUpdated(updated);
     } catch (err) {
-      setInvestError(err instanceof Error ? err.message : 'Fehler beim Speichern des Beitrags.');
+      setInvestError(err instanceof Error ? err.message : 'Fehler beim Speichern der Investition.');
     }
   };
 
@@ -86,7 +86,7 @@ export const GamePage: React.FC<GamePageProps> = ({
           )}
         </div>
 
-        {/* Die Abkommens-Übersicht steht in der Seitenspalte, damit die Hauptspalte (Beitrag und Rückmeldung)
+        {/* Die Abkommens-Übersicht steht in der Seitenspalte, damit die Hauptspalte (Investition und Rückmeldung)
             in beiden Bedingungen identisch aufgebaut ist und die Rückmeldung ohne Scrollen sichtbar bleibt. */}
         <div className="game-main-grid__right">
           {gameState.roundPhase === 'INVESTMENT' && (

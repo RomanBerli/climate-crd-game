@@ -8,20 +8,20 @@ interface SurveyPageProps {
 }
 
 const STRATEGY_OPTIONS = [
-  'Ich habe möglichst wenig eingezahlt, um viel Geld zu behalten, obwohl die Gruppe dadurch das Ziel verfehlen konnte.',
-  'Ich habe in jeder Runde ungefähr den fairen Beitrag von 30 Rappen eingezahlt.',
-  'Ich habe mehr als den fairen Beitrag eingezahlt, damit die Gruppe das Ziel sicher erreicht.',
-  'Ich habe mich nach den Beiträgen der anderen gerichtet.',
+  'Ich habe möglichst wenig investiert, um viel Geld zu behalten, obwohl die Gruppe dadurch das Ziel verfehlen konnte.',
+  'Ich habe in jeder Runde ungefähr 30 Rappen investiert.',
+  'Ich habe mehr als 30 Rappen investiert, damit die Gruppe das Ziel sicher erreicht.',
+  'Ich habe mich nach den Investitionen der anderen gerichtet.',
   'Ich hatte keine feste Strategie.',
 ];
 
 const UNFAIRNESS_OPTIONS = [
-  'Ich habe mehr eingezahlt, um es auszugleichen.',
+  'Ich habe mehr investiert, um es auszugleichen.',
   'Ich habe mich nicht beeinflussen lassen und gleich weitergemacht.',
-  'Ich habe weniger eingezahlt, weil ich das unfair fand.',
-  'Ich habe weniger eingezahlt, weil ich nicht mehr an das Ziel geglaubt habe.',
-  'Ich habe nicht auf die Beiträge der anderen geachtet.',
-  'Es gab keine Beiträge unter 30 Rappen.',
+  'Ich habe weniger investiert, weil ich das unfair fand.',
+  'Ich habe weniger investiert, weil ich nicht mehr an das Ziel geglaubt habe.',
+  'Ich habe nicht auf die Investitionen der anderen geachtet.',
+  'Es gab keine Investitionen unter 30 Rappen.',
 ];
 
 const CONTRACT_JOINED_OPTIONS = [
@@ -29,27 +29,27 @@ const CONTRACT_JOINED_OPTIONS = [
   'Ich wollte verhindern, dass ich mein eigenes Geld verliere.',
   'Ich habe erwartet, dass die meisten anderen auch beitreten.',
   'Ich wollte ein Vorbild sein, damit die anderen auch fair spielen.',
-  'Ich finde es fair, wenn alle gleich viel beitragen.',
-  'Ich wollte mich auf einen festen Beitrag festlegen, statt jede Runde neu zu entscheiden.',
+  'Ich finde es fair, wenn alle gleich viel investieren.',
+  'Ich wollte mich auf einen festen Investitionsbetrag festlegen, statt jede Runde neu zu entscheiden.',
   'OTHER',
 ];
 
 const CONTRACT_NOT_JOINED_OPTIONS = [
-  'Ich wollte möglichst wenig einzahlen, um viel Geld zu behalten.',
-  'Ich wollte meine Beiträge den Beiträgen der anderen anpassen können.',
+  'Ich wollte möglichst wenig investieren, um viel Geld zu behalten.',
+  'Ich wollte meine Investitionen den Investitionen der anderen anpassen können.',
   'Ich habe nicht erwartet, dass genug andere beitreten.',
   'Ich dachte, die Gruppe erreicht das Ziel auch ohne Abkommen.',
-  'Ich wollte meinen fairen Beitrag freiwillig leisten, ohne mich zu verpflichten.',
+  'Ich wollte meine faire Investition freiwillig leisten, ohne mich zu verpflichten.',
   'Ich habe das Abkommen nicht richtig verstanden.',
   'OTHER',
 ];
 
 const CONTRACT_LEFT_OPTIONS = [
-  'Ich fand es unfair, dass andere weniger als 30 Rappen eingezahlt haben.',
+  'Ich fand es unfair, dass andere weniger als 30 Rappen investiert haben.',
   'Ich habe nicht mehr geglaubt, dass die Gruppe das Ziel erreicht.',
-  'Ich dachte, die Gruppe erreicht das Ziel auch ohne meinen Beitrag.',
+  'Ich dachte, die Gruppe erreicht das Ziel auch ohne meine Investitionen.',
   'Ich wollte mehr eigenes Geld behalten.',
-  'Ich wollte meine Beiträge den Beiträgen der anderen anpassen können.',
+  'Ich wollte meine Investitionen den Investitionen der anderen anpassen können.',
   'Ich bin ausgetreten, weil andere ausgetreten sind.',
   'OTHER',
 ];
@@ -115,7 +115,7 @@ export const SurveyPage: React.FC<SurveyPageProps> = ({
     }
 
     if (!reactionToUnfairness) {
-      setError('Bitte wähle eine Antwort bei Frage 2 (Reaktion auf tiefe Beiträge) aus.');
+      setError('Bitte wähle eine Antwort bei Frage 2 (Reaktion auf tiefe Investitionen) aus.');
       return;
     }
 
@@ -242,10 +242,10 @@ export const SurveyPage: React.FC<SurveyPageProps> = ({
             </div>
           </div>
 
-          {/* Frage 2: Reaktion auf tiefe Beiträge */}
+          {/* Frage 2: Reaktion auf tiefe Investitionen */}
           <div className="survey-question">
             <span className="survey-question__title">
-              Haben andere in einer Runde weniger als 30 Rappen eingezahlt? Wie hast du darauf reagiert?
+              Haben andere in einer Runde weniger als 30 Rappen investiert? Wie hast du darauf reagiert?
             </span>
             <div className="survey-radio-list">
               {UNFAIRNESS_OPTIONS.map((option) => (

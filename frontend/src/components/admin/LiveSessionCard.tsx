@@ -26,7 +26,7 @@ const PHASE_LABELS: Record<string, string> = {
   CONTRACT_JOIN: 'Abkommen-Beitritt (vor Runde 1)',
   CONTRACT_REVIEW: 'Zwischenrunde (Abkommen)',
   CONTRACT_VOTE: 'Abstimmung (Abkommen)',
-  INVESTMENT: 'Einzahlungsrunde',
+  INVESTMENT: 'Investitionsrunde',
 };
 
 export const LiveSessionCard: React.FC<LiveSessionCardProps> = ({
@@ -183,7 +183,7 @@ export const LiveSessionCard: React.FC<LiveSessionCardProps> = ({
         <div className="admin-pot-monitor">
           <div className="admin-pot-monitor__labels">
             <span>
-              <strong>Endstand Klimakonto:</strong> {formatFr(session.totalPotRappen)} /{' '}
+              <strong>Endstand Klimamassnahmen:</strong> {formatFr(session.totalPotRappen)} /{' '}
               {formatFr(session.targetSumRappen)}
             </span>
             <span className="admin-pot-monitor__outcome">

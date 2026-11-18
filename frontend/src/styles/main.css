@@ -621,7 +621,7 @@ body {
   }
 }
 
-/* Einspaltig (schmales Fenster): Abkommen zuerst, dann Beitrag, Rückmeldung, Notizblock */
+/* Einspaltig (schmales Fenster): Abkommen zuerst, dann Investition, Rückmeldung, Notizblock */
 @media (max-width: 1024px) {
   .game-main-grid__left,
   .game-main-grid__right {

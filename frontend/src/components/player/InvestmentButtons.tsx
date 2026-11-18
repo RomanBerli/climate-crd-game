@@ -48,7 +48,7 @@ export const InvestmentButtons: React.FC<InvestmentButtonsProps> = ({
   return (
     <section className="investment-card">
       <div className="investment-card__header" style={{ alignItems: 'center' }}>
-        <h2>Beitrag</h2>
+        <h2>Investition</h2>
         <div className="metric-box metric-box--highlight">
           <span className="metric-box__label">Eigenes Restguthaben</span>
           <strong className="metric-box__value metric-box__value--balance">
@@ -61,12 +61,12 @@ export const InvestmentButtons: React.FC<InvestmentButtonsProps> = ({
         <div className="investment-confirmed">
           <div className="investment-confirmed__icon">✓</div>
           <div>
-            <h3>Dein Beitrag für diese Runde: {formatFr(submittedAmount ?? 0)}</h3>
+            <h3>Deine Investition für diese Runde: {formatFr(submittedAmount ?? 0)}</h3>
             <p>
               {allPlayersReady
                 ? isLastRound
-                  ? 'Alle haben entschieden. Unten siehst du die Beiträge dieser Runde. Die Spielleitung schliesst das Spiel ab.'
-                  : 'Alle haben entschieden. Unten siehst du die Beiträge dieser Runde. Die Spielleitung startet die nächste Runde.'
+                  ? 'Alle haben entschieden. Unten siehst du die Investitionen dieser Runde. Die Spielleitung schliesst das Spiel ab.'
+                  : 'Alle haben entschieden. Unten siehst du die Investitionen dieser Runde. Die Spielleitung startet die nächste Runde.'
                 : 'Warte auf die anderen Spieler...'}
             </p>
           </div>
@@ -96,8 +96,8 @@ export const InvestmentButtons: React.FC<InvestmentButtonsProps> = ({
           <div className="confirm-row">
             <span className="confirm-row__hint">
               {selectedAmount === null
-                ? 'Wähle einen Betrag und bestätige ihn danach.'
-                : `Ausgewählt: ${formatFr(selectedAmount)} – nach dem Bestätigen kannst du den Beitrag nicht mehr ändern.`}
+                ? 'Wähle einen Investition und bestätige ihn danach.'
+                : `Ausgewählt: ${formatFr(selectedAmount)} – nach dem Bestätigen kannst du die Investition nicht mehr ändern.`}
             </span>
             <button
               type="button"
@@ -105,7 +105,7 @@ export const InvestmentButtons: React.FC<InvestmentButtonsProps> = ({
               disabled={selectedAmount === null || submitting}
               onClick={handleConfirm}
             >
-              {submitting ? 'Wird gespeichert...' : 'Beitrag bestätigen'}
+              {submitting ? 'Wird gespeichert...' : 'Investition bestätigen'}
             </button>
           </div>
         </>
